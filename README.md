@@ -6,18 +6,23 @@ The first hardware target is the **Huion PW500** (from the HS611) used directly 
 
 ## Current status
 
-**P001 — HID Scanner: implemented**
+- **P001 — HID Scanner: implemented and build-validated**
+- **P002 — Pen Event Monitor: implemented; Windows build validation in progress**
 
-The scanner enumerates HID interfaces exposed by Windows and prints:
+### P001 — GalaxyPenHidScanner.exe
 
-- device path and Windows description;
-- Vendor ID / Product ID / Version;
-- HID Usage Page / Usage;
-- input/output/feature report sizes;
-- manufacturer, product and serial strings when available;
-- a marker for Digitizer-class devices (Usage Page 0x0D).
+Enumerates HID interfaces and reports VID/PID, Usage Page/Usage, report sizes and Digitizer candidates.
 
-> Important: a passive EMR pen normally does not enumerate as a separate USB/HID device. P001 identifies the digitizer(s). P002 will capture live reports so we can compare how the digitizer represents S Pen vs PW500.
+### P002 — GalaxyPenEventMonitor.exe
+
+Captures:
+
+- raw Digitizer HID reports through Windows Raw Input when available;
+- interpreted pen events through `WM_POINTER` / `GetPointerPenInfo`;
+- pressure, tilt, buttons/pen flags, coordinates and timestamps;
+- CSV logs for later S Pen vs PW500 comparison.
+
+> A passive EMR pen normally does not enumerate as a separate USB/HID device on the display. The digitizer is the HID device; P002 observes how that digitizer reports each pen.
 
 ## Build
 
@@ -30,9 +35,17 @@ Requirements:
 ```powershell
 cmake -S . -B build -A x64
 cmake --build build --config Release
-.\build\Release\GalaxyPenHidScanner.exe
 ```
 
-## Roadmap
+Executables:
 
-See [docs/PLAN.md](docs/PLAN.md).
+```text
+build\Release\GalaxyPenHidScanner.exe
+build\Release\GalaxyPenEventMonitor.exe
+```
+
+## Documentation
+
+- [Development plan](docs/PLAN.md)
+- [P001 — HID Scanner](docs/P001-HID-SCANNER.md)
+- [P002 — Pen Event Monitor](docs/P002-PEN-EVENT-MONITOR.md)
