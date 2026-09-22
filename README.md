@@ -2,7 +2,7 @@
 
 Experimental Windows project to investigate and remap partially compatible EMR/HID pens on the Samsung Galaxy Book3 360.
 
-The first hardware target is the **Huion PW500** (from the HS611) used directly on the Galaxy Book3 360 display, compared against the native Samsung S Pen.
+The first hardware target is the **Huion PW500** (from the HS611) used directly on the Galaxy Book3 360 display. The native Samsung S Pen was a diagnostic reference, not a requirement for people using PW500 correction mode.
 
 ## Current status
 

@@ -2,7 +2,7 @@
 
 ## User choice
 
-The user wants a notification-area icon to turn the correction on when using the PW500 directly on the Galaxy screen and off when using the S Pen normally. Automatic classification is no longer required for activation. The P002.6 pen-pattern indicator remains a diagnostic observation only.
+The user wants a notification-area icon to turn correction on and off when using a PW500 directly on the Galaxy screen. The intended user may not own an S Pen; S Pen support while correction is on is **not a product requirement**. It served as a known-good reference during diagnosis. Automatic classification is no longer required for activation. The P002.6 pen-pattern indicator remains a diagnostic observation only.
 
 "On/off" means changing the **filter's behavior**, not repeatedly installing, disabling or unloading the Windows pen device/driver. The tray application would request a mode change and display the state confirmed by the driver. A tray icon can be implemented with Windows [`Shell_NotifyIcon`](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shell_notifyiconw); a framework driver can expose a separate [device interface](https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/using-device-interfaces) for control requests. Those APIs establish a possible control channel, **not** that a safe pen-report filter has already been proven.
 
@@ -10,11 +10,11 @@ The user wants a notification-area icon to turn the correction on when using the
 
 | State | Pen-report behavior | Tray display |
 | --- | --- | --- |
-| Off (default) | Pass every report through unchanged, including S Pen and PW500. | Clearly off. |
-| On | Apply the explicitly chosen, limited PW500 transform to original pen reports; do not create a second pen stream. | Clearly on only after driver acknowledgement. The S Pen may also be changed in this mode. |
+| Off (default) | Pass every report through unchanged, regardless of which pen is used. | Clearly off. |
+| On | Apply the explicitly chosen, limited PW500 transform to original pen reports; do not create a second pen stream. Other pens are outside the intended on-mode use. | Clearly on only after driver acknowledgement. |
 | Driver absent, control link lost, or internal error | Revert to pass-through. A control-app exit/crash must not leave correction stuck on; require a bounded lease or equivalent fail-safe. | Error/off, never falsely on. |
 
-The initial filter experiment should be **pass-through only** in both switch positions. It must establish that the selected device remains functional, the S Pen behaves normally while off, and input is not duplicated before pressure bytes are ever modified. Only then can a pressure transform be enabled behind the same switch. The current PW500 raw pressure is mostly saturated and falls as force increases in its narrow varying region, so any remapping is degraded and cannot reconstruct real force.
+The initial filter experiment should be **pass-through only** in both switch positions. It must establish that the selected device remains functional, the original input is unchanged while off, and input is not duplicated before pressure bytes are ever modified. Only then can a pressure transform be enabled behind the same switch. The current PW500 raw pressure is mostly saturated and falls as force increases in its narrow varying region, so any remapping is degraded and cannot reconstruct real force.
 
 Manual activation removes the need for a one-second pen-recognition delay on the first stroke. It does **not** solve original-input isolation, pressure saturation, driver signing or installation risk. A filter on the `COL04` pen collection is a research candidate; the captured `COL01` helper reports must not be assumed to be the bytes received by that filter.
 
