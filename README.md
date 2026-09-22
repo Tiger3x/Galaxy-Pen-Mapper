@@ -13,14 +13,15 @@ The first hardware target is the **Huion PW500** (from the HS611) used directly 
 
 Enumerates HID interfaces and reports VID/PID, Usage Page/Usage, report sizes and Digitizer candidates.
 
-### P002 — GalaxyPenEventMonitor.exe
+### P002.1 — GalaxyPenEventMonitor.exe
 
-Captures:
+Native window-only test bench. Captures:
 
 - raw Digitizer HID reports through Windows Raw Input when available;
 - interpreted pen events through `WM_POINTER` / `GetPointerPenInfo`;
 - pressure, tilt, buttons/pen flags, coordinates and timestamps;
-- CSV logs for later S Pen vs PW500 comparison.
+- CSV logs for later S Pen vs PW500 comparison;
+- only while capture is enabled, the window is active, and the pen is inside the bordered test area.
 
 > A passive EMR pen normally does not enumerate as a separate USB/HID device on the display. The digitizer is the HID device; P002 observes how that digitizer reports each pen.
 
