@@ -1,23 +1,36 @@
 #define _WIN32_WINNT 0x0A00
 
 #include <windows.h>
-#include <hidusage.h>
 
 #include <chrono>
-#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
-#include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
 
 namespace {
 
+constexpr int IDC_START_CAPTURE = 1001;
+constexpr int IDC_STOP_CAPTURE = 1002;
+constexpr int IDC_CLEAR_STATUS = 1003;
+
 std::ofstream g_log;
-std::wstring g_status = L"Aguardando eventos da caneta...";
+std::string g_logFilename;
+bool g_captureEnabled = false;
+bool g_penInsideCaptureArea = false;
 unsigned long long g_eventCount = 0;
+
+std::wstring g_status = L"Pronto. Pressione Iniciar captura.";
+std::wstring g_pointerFlags = L"-";
+std::wstring g_penFlags = L"-";
+std::wstring g_latestRaw = L"-";
+UINT32 g_pressure = 0;
+INT32 g_tiltX = 0;
+INT32 g_tiltY = 0;
+UINT32 g_rotation = 0;
+POINT g_penPoint{};
 
 std::string Timestamp() {
     using namespace std::chrono;
@@ -57,16 +70,35 @@ std::string Csv(const std::string& value) {
 
 std::string Narrow(const std::wstring& value) {
     if (value.empty()) return {};
+
     const int size = WideCharToMultiByte(
-        CP_UTF8, 0, value.data(), static_cast<int>(value.size()),
-        nullptr, 0, nullptr, nullptr);
+        CP_UTF8,
+        0,
+        value.data(),
+        static_cast<int>(value.size()),
+        nullptr,
+        0,
+        nullptr,
+        nullptr);
+
     if (size <= 0) return {};
 
     std::string out(static_cast<size_t>(size), '\0');
     WideCharToMultiByte(
-        CP_UTF8, 0, value.data(), static_cast<int>(value.size()),
-        out.data(), size, nullptr, nullptr);
+        CP_UTF8,
+        0,
+        value.data(),
+        static_cast<int>(value.size()),
+        out.data(),
+        size,
+        nullptr,
+        nullptr);
+
     return out;
+}
+
+std::wstring WidenAscii(const std::string& value) {
+    return std::wstring(value.begin(), value.end());
 }
 
 std::wstring RawDeviceName(HANDLE device) {
@@ -76,9 +108,13 @@ std::wstring RawDeviceName(HANDLE device) {
 
     std::vector<wchar_t> buffer(static_cast<size_t>(chars) + 1, L'\0');
     if (GetRawInputDeviceInfoW(
-            device, RIDI_DEVICENAME, buffer.data(), &chars) == static_cast<UINT>(-1)) {
+            device,
+            RIDI_DEVICENAME,
+            buffer.data(),
+            &chars) == static_cast<UINT>(-1)) {
         return L"";
     }
+
     return buffer.data();
 }
 
@@ -86,24 +122,36 @@ RID_DEVICE_INFO RawDeviceInfo(HANDLE device) {
     RID_DEVICE_INFO info{};
     info.cbSize = sizeof(info);
     UINT size = sizeof(info);
-    if (GetRawInputDeviceInfoW(device, RIDI_DEVICEINFO, &info, &size) == static_cast<UINT>(-1)) {
+
+    if (GetRawInputDeviceInfoW(
+            device,
+            RIDI_DEVICEINFO,
+            &info,
+            &size) == static_cast<UINT>(-1)) {
         info.dwType = static_cast<DWORD>(-1);
     }
+
     return info;
 }
 
 std::string HexBytes(const BYTE* data, size_t size) {
     std::ostringstream out;
     out << std::hex << std::uppercase << std::setfill('0');
+
     for (size_t i = 0; i < size; ++i) {
         if (i) out << ' ';
         out << std::setw(2) << static_cast<unsigned>(data[i]);
     }
+
     return out.str();
 }
 
 std::string PointerFlagsText(UINT32 flags) {
-    struct FlagName { UINT32 flag; const char* name; };
+    struct FlagName {
+        UINT32 flag;
+        const char* name;
+    };
+
     static constexpr FlagName names[] = {
         {POINTER_FLAG_NEW, "NEW"},
         {POINTER_FLAG_INRANGE, "INRANGE"},
@@ -121,6 +169,7 @@ std::string PointerFlagsText(UINT32 flags) {
 
     std::ostringstream out;
     bool first = true;
+
     for (const auto& item : names) {
         if ((flags & item.flag) != 0) {
             if (!first) out << '|';
@@ -128,13 +177,15 @@ std::string PointerFlagsText(UINT32 flags) {
             first = false;
         }
     }
-    return out.str();
+
+    return first ? "-" : out.str();
 }
 
 std::string PenFlagsText(PEN_FLAGS flags) {
     std::ostringstream out;
     bool first = true;
-    auto append = [&](const char* value) {
+
+    const auto append = [&](const char* value) {
         if (!first) out << '|';
         out << value;
         first = false;
@@ -143,7 +194,31 @@ std::string PenFlagsText(PEN_FLAGS flags) {
     if ((flags & PEN_FLAG_BARREL) != 0) append("BARREL");
     if ((flags & PEN_FLAG_INVERTED) != 0) append("INVERTED");
     if ((flags & PEN_FLAG_ERASER) != 0) append("ERASER");
-    return out.str();
+
+    return first ? "-" : out.str();
+}
+
+RECT CaptureRect(HWND hwnd) {
+    RECT client{};
+    GetClientRect(hwnd, &client);
+
+    RECT area{};
+    area.left = 32;
+    area.top = 190;
+    area.right = client.right - 32;
+    area.bottom = client.bottom - 32;
+
+    if (area.right < area.left + 100) area.right = area.left + 100;
+    if (area.bottom < area.top + 100) area.bottom = area.top + 100;
+
+    return area;
+}
+
+bool PointInCaptureArea(HWND hwnd, POINT screenPoint) {
+    POINT clientPoint = screenPoint;
+    ScreenToClient(hwnd, &clientPoint);
+    const RECT area = CaptureRect(hwnd);
+    return PtInRect(&area, clientPoint) != FALSE;
 }
 
 void WriteHeader() {
@@ -153,16 +228,90 @@ void WriteHeader() {
     g_log.flush();
 }
 
-void LogRawInput(HRAWINPUT handle) {
+void CloseLog() {
+    if (g_log.is_open()) {
+        g_log.flush();
+        g_log.close();
+    }
+}
+
+bool StartCapture(HWND hwnd) {
+    CloseLog();
+
+    g_logFilename = LogFilename();
+    g_log.open(g_logFilename, std::ios::out | std::ios::trunc);
+
+    if (!g_log) {
+        MessageBoxW(
+            hwnd,
+            L"Não foi possível criar o arquivo CSV de captura.",
+            L"Galaxy Pen Event Monitor",
+            MB_OK | MB_ICONERROR);
+        return false;
+    }
+
+    WriteHeader();
+    g_eventCount = 0;
+    g_captureEnabled = true;
+    g_status = L"GRAVANDO. Somente eventos dentro da área de teste serão salvos.";
+
+    SetFocus(hwnd);
+    InvalidateRect(hwnd, nullptr, TRUE);
+    return true;
+}
+
+void StopCapture(HWND hwnd, bool showMessage) {
+    const bool wasCapturing = g_captureEnabled;
+    g_captureEnabled = false;
+    CloseLog();
+
+    if (wasCapturing) {
+        g_status = L"Captura parada. O CSV foi finalizado.";
+
+        if (showMessage) {
+            std::wstring message =
+                L"Captura concluída.\n\nEventos gravados: " +
+                std::to_wstring(g_eventCount) +
+                L"\nArquivo: " +
+                WidenAscii(g_logFilename);
+
+            MessageBoxW(
+                hwnd,
+                message.c_str(),
+                L"Galaxy Pen Event Monitor",
+                MB_OK | MB_ICONINFORMATION);
+        }
+    }
+
+    InvalidateRect(hwnd, nullptr, TRUE);
+}
+
+void LogRawInput(HRAWINPUT handle, HWND hwnd) {
+    if (!g_captureEnabled ||
+        !g_penInsideCaptureArea ||
+        GetForegroundWindow() != hwnd ||
+        !g_log.is_open()) {
+        return;
+    }
+
     UINT size = 0;
-    if (GetRawInputData(handle, RID_INPUT, nullptr, &size, sizeof(RAWINPUTHEADER)) != 0 ||
+    if (GetRawInputData(
+            handle,
+            RID_INPUT,
+            nullptr,
+            &size,
+            sizeof(RAWINPUTHEADER)) != 0 ||
         size == 0) {
         return;
     }
 
     std::vector<BYTE> buffer(size);
     if (GetRawInputData(
-            handle, RID_INPUT, buffer.data(), &size, sizeof(RAWINPUTHEADER)) != size) {
+            handle,
+            RID_INPUT,
+            buffer.data(),
+            &size,
+            sizeof(RAWINPUTHEADER)) != size) {
         return;
     }
 
@@ -176,7 +325,8 @@ void LogRawInput(HRAWINPUT handle) {
     const RAWHID& hid = raw->data.hid;
 
     for (DWORD report = 0; report < hid.dwCount; ++report) {
-        const BYTE* bytes = hid.bRawData + (static_cast<size_t>(report) * hid.dwSizeHid);
+        const BYTE* bytes =
+            hid.bRawData + (static_cast<size_t>(report) * hid.dwSizeHid);
         const std::string hex = HexBytes(bytes, hid.dwSizeHid);
 
         g_log << Csv(Timestamp()) << ",RAW_HID,"
@@ -190,20 +340,30 @@ void LogRawInput(HRAWINPUT handle) {
               << ",,,,,,,,,\n";
 
         ++g_eventCount;
-
-        std::wostringstream status;
-        status << L"RAW HID  |  UsagePage 0x"
-               << std::hex << std::uppercase << info.hid.usUsagePage
-               << L" Usage 0x" << info.hid.usUsage
-               << std::dec << L"  |  " << hid.dwSizeHid << L" bytes"
-               << L"  |  eventos: " << g_eventCount;
-        g_status = status.str();
+        g_latestRaw = WidenAscii(hex);
     }
 
     g_log.flush();
+    InvalidateRect(hwnd, nullptr, TRUE);
 }
 
-void LogPenPointer(UINT message, WPARAM wParam, HWND hwnd) {
+void UpdatePenState(const POINTER_PEN_INFO& pen) {
+    g_pressure =
+        (pen.penMask & PEN_MASK_PRESSURE) != 0 ? pen.pressure : 0;
+    g_tiltX =
+        (pen.penMask & PEN_MASK_TILT_X) != 0 ? pen.tiltX : 0;
+    g_tiltY =
+        (pen.penMask & PEN_MASK_TILT_Y) != 0 ? pen.tiltY : 0;
+    g_rotation =
+        (pen.penMask & PEN_MASK_ROTATION) != 0 ? pen.rotation : 0;
+
+    g_pointerFlags = WidenAscii(
+        PointerFlagsText(pen.pointerInfo.pointerFlags));
+    g_penFlags = WidenAscii(PenFlagsText(pen.penFlags));
+    g_penPoint = pen.pointerInfo.ptPixelLocation;
+}
+
+void HandlePenPointer(UINT message, WPARAM wParam, HWND hwnd) {
     const UINT32 pointerId = GET_POINTERID_WPARAM(wParam);
 
     POINTER_INPUT_TYPE type{};
@@ -212,6 +372,37 @@ void LogPenPointer(UINT message, WPARAM wParam, HWND hwnd) {
     POINTER_PEN_INFO pen{};
     if (!GetPointerPenInfo(pointerId, &pen)) return;
 
+    const bool wasInside = g_penInsideCaptureArea;
+    const bool isInside =
+        message != WM_POINTERLEAVE &&
+        PointInCaptureArea(hwnd, pen.pointerInfo.ptPixelLocation);
+
+    g_penInsideCaptureArea = isInside;
+    UpdatePenState(pen);
+
+    if (isInside) {
+        g_status = g_captureEnabled
+            ? L"GRAVANDO — caneta dentro da área de teste."
+            : L"Caneta detectada na área. Pressione Iniciar captura para gravar.";
+    } else if (message == WM_POINTERLEAVE || wasInside) {
+        g_status = g_captureEnabled
+            ? L"GRAVANDO pausado — mova a caneta para dentro da área de teste."
+            : L"Caneta fora da área de teste.";
+    }
+
+    if (!g_captureEnabled || !g_log.is_open()) {
+        InvalidateRect(hwnd, nullptr, TRUE);
+        return;
+    }
+
+    const bool shouldLogLeave =
+        message == WM_POINTERLEAVE && wasInside;
+
+    if (!isInside && !shouldLogLeave) {
+        InvalidateRect(hwnd, nullptr, TRUE);
+        return;
+    }
+
     const char* eventName = "POINTER";
     if (message == WM_POINTERDOWN) eventName = "POINTER_DOWN";
     else if (message == WM_POINTERUP) eventName = "POINTER_UP";
@@ -219,46 +410,24 @@ void LogPenPointer(UINT message, WPARAM wParam, HWND hwnd) {
     else if (message == WM_POINTERENTER) eventName = "POINTER_ENTER";
     else if (message == WM_POINTERLEAVE) eventName = "POINTER_LEAVE";
 
-    const auto pointerFlags = PointerFlagsText(pen.pointerInfo.pointerFlags);
-    const auto penFlags = PenFlagsText(pen.penFlags);
-
-    const UINT32 pressure =
-        (pen.penMask & PEN_MASK_PRESSURE) != 0 ? pen.pressure : 0;
-    const INT32 tiltX =
-        (pen.penMask & PEN_MASK_TILT_X) != 0 ? pen.tiltX : 0;
-    const INT32 tiltY =
-        (pen.penMask & PEN_MASK_TILT_Y) != 0 ? pen.tiltY : 0;
-    const UINT32 rotation =
-        (pen.penMask & PEN_MASK_ROTATION) != 0 ? pen.rotation : 0;
+    const std::string pointerFlags =
+        PointerFlagsText(pen.pointerInfo.pointerFlags);
+    const std::string penFlags = PenFlagsText(pen.penFlags);
 
     g_log << Csv(Timestamp()) << ',' << eventName
           << ",\"WINDOWS_POINTER\",,,,,,,"
           << pointerId << ','
           << Csv(pointerFlags) << ','
           << Csv(penFlags) << ','
-          << pressure << ','
-          << tiltX << ','
-          << tiltY << ','
-          << rotation << ','
+          << g_pressure << ','
+          << g_tiltX << ','
+          << g_tiltY << ','
+          << g_rotation << ','
           << pen.pointerInfo.ptPixelLocation.x << ','
           << pen.pointerInfo.ptPixelLocation.y << '\n';
+
     g_log.flush();
-
     ++g_eventCount;
-
-    const std::string eventText(eventName);
-    const std::wstring eventWide(eventText.begin(), eventText.end());
-
-    std::wostringstream status;
-    status << L"CANETA  |  " << eventWide
-           << L"  |  pressão " << pressure
-           << L"  |  tilt " << tiltX << L"," << tiltY
-           << L"  |  eventos: " << g_eventCount;
-    if (!penFlags.empty()) {
-        status << L"  |  " << std::wstring(penFlags.begin(), penFlags.end());
-    }
-    g_status = status.str();
-
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 
@@ -266,35 +435,144 @@ bool RegisterDigitizerRawInput(HWND hwnd) {
     RAWINPUTDEVICE device{};
     device.usUsagePage = 0x0D;
     device.usUsage = 0;
-    device.dwFlags = RIDEV_PAGEONLY | RIDEV_INPUTSINK | RIDEV_DEVNOTIFY;
+    device.dwFlags = RIDEV_PAGEONLY | RIDEV_DEVNOTIFY;
     device.hwndTarget = hwnd;
 
-    if (!RegisterRawInputDevices(&device, 1, sizeof(device))) {
-        std::wcerr << L"RegisterRawInputDevices falhou: " << GetLastError() << L"\n";
-        return false;
-    }
-    return true;
+    return RegisterRawInputDevices(
+               &device,
+               1,
+               sizeof(device)) != FALSE;
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+void SetDefaultFont(HWND control) {
+    SendMessageW(
+        control,
+        WM_SETFONT,
+        reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)),
+        TRUE);
+}
+
+void CreateControls(HWND hwnd) {
+    HWND start = CreateWindowExW(
+        0,
+        L"BUTTON",
+        L"Iniciar captura",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        32,
+        96,
+        150,
+        36,
+        hwnd,
+        reinterpret_cast<HMENU>(IDC_START_CAPTURE),
+        GetModuleHandleW(nullptr),
+        nullptr);
+
+    HWND stop = CreateWindowExW(
+        0,
+        L"BUTTON",
+        L"Parar",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        194,
+        96,
+        110,
+        36,
+        hwnd,
+        reinterpret_cast<HMENU>(IDC_STOP_CAPTURE),
+        GetModuleHandleW(nullptr),
+        nullptr);
+
+    HWND clear = CreateWindowExW(
+        0,
+        L"BUTTON",
+        L"Limpar painel",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        316,
+        96,
+        130,
+        36,
+        hwnd,
+        reinterpret_cast<HMENU>(IDC_CLEAR_STATUS),
+        GetModuleHandleW(nullptr),
+        nullptr);
+
+    SetDefaultFont(start);
+    SetDefaultFont(stop);
+    SetDefaultFont(clear);
+}
+
+void DrawLabelValue(
+    HDC dc,
+    int x,
+    int y,
+    const wchar_t* label,
+    const std::wstring& value) {
+
+    std::wstring text = std::wstring(label) + L": " + value;
+    TextOutW(
+        dc,
+        x,
+        y,
+        text.c_str(),
+        static_cast<int>(text.size()));
+}
+
+LRESULT CALLBACK WindowProc(
+    HWND hwnd,
+    UINT message,
+    WPARAM wParam,
+    LPARAM lParam) {
+
     switch (message) {
         case WM_CREATE:
-            if (RegisterDigitizerRawInput(hwnd)) {
-                g_status = L"Monitor ativo. Aproxime a S Pen ou PW500 e desenhe nesta janela.";
-            } else {
-                g_status = L"Raw Input indisponível; WM_POINTER continuará sendo monitorado.";
+            CreateControls(hwnd);
+
+            if (!RegisterDigitizerRawInput(hwnd)) {
+                g_status =
+                    L"Raw Input não pôde ser registrado. "
+                    L"WM_POINTER continuará disponível.";
             }
             return 0;
 
+        case WM_COMMAND:
+            switch (LOWORD(wParam)) {
+                case IDC_START_CAPTURE:
+                    StartCapture(hwnd);
+                    return 0;
+
+                case IDC_STOP_CAPTURE:
+                    StopCapture(hwnd, true);
+                    return 0;
+
+                case IDC_CLEAR_STATUS:
+                    g_eventCount = 0;
+                    g_pointerFlags = L"-";
+                    g_penFlags = L"-";
+                    g_latestRaw = L"-";
+                    g_pressure = 0;
+                    g_tiltX = 0;
+                    g_tiltY = 0;
+                    g_rotation = 0;
+                    g_status = g_captureEnabled
+                        ? L"GRAVANDO. Painel limpo."
+                        : L"Painel limpo. Pressione Iniciar captura.";
+                    InvalidateRect(hwnd, nullptr, TRUE);
+                    return 0;
+
+                default:
+                    break;
+            }
+            break;
+
         case WM_INPUT:
-            LogRawInput(reinterpret_cast<HRAWINPUT>(lParam));
-            InvalidateRect(hwnd, nullptr, TRUE);
+            LogRawInput(
+                reinterpret_cast<HRAWINPUT>(lParam),
+                hwnd);
             return DefWindowProcW(hwnd, message, wParam, lParam);
 
         case WM_INPUT_DEVICE_CHANGE:
             g_status = wParam == GIDC_ARRIVAL
-                ? L"Dispositivo Raw Input conectado."
-                : L"Dispositivo Raw Input removido.";
+                ? L"Dispositivo de entrada conectado."
+                : L"Dispositivo de entrada removido.";
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
 
@@ -303,106 +581,196 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case WM_POINTERUPDATE:
         case WM_POINTERENTER:
         case WM_POINTERLEAVE:
-            LogPenPointer(message, wParam, hwnd);
+            HandlePenPointer(message, wParam, hwnd);
             return DefWindowProcW(hwnd, message, wParam, lParam);
+
+        case WM_ACTIVATE:
+            if (LOWORD(wParam) == WA_INACTIVE && g_captureEnabled) {
+                g_status =
+                    L"GRAVANDO pausado — a janela precisa estar ativa.";
+                InvalidateRect(hwnd, nullptr, TRUE);
+            }
+            return 0;
 
         case WM_PAINT: {
             PAINTSTRUCT ps{};
             HDC dc = BeginPaint(hwnd, &ps);
-            RECT rect{};
-            GetClientRect(hwnd, &rect);
 
             SetBkMode(dc, TRANSPARENT);
+            SelectObject(dc, GetStockObject(DEFAULT_GUI_FONT));
 
-            RECT titleRect = rect;
-            titleRect.left += 24;
-            titleRect.top += 24;
-            DrawTextW(
+            TextOutW(
                 dc,
-                L"Galaxy Pen Event Monitor — P002",
-                -1,
-                &titleRect,
-                DT_LEFT | DT_TOP | DT_SINGLELINE);
+                32,
+                24,
+                L"Galaxy Pen Event Monitor — P002.1",
+                34);
 
-            RECT infoRect = rect;
-            infoRect.left += 24;
-            infoRect.right -= 24;
-            infoRect.top += 70;
-            const wchar_t* instructions =
-                L"Use a caneta dentro desta janela.\n\n"
-                L"Teste hover, toque, pressão, botão inferior, botão superior e traços.\n"
-                L"O programa grava WM_POINTER interpretado pelo Windows e HID bruto quando disponível.\n"
-                L"Feche a janela para finalizar o arquivo CSV.";
-            DrawTextW(dc, instructions, -1, &infoRect, DT_LEFT | DT_TOP | DT_WORDBREAK);
+            TextOutW(
+                dc,
+                32,
+                52,
+                L"Somente a área de teste abaixo é registrada.",
+                44);
 
-            RECT statusRect = rect;
-            statusRect.left += 24;
-            statusRect.right -= 24;
-            statusRect.top += 190;
-            DrawTextW(dc, g_status.c_str(), -1, &statusRect, DT_LEFT | DT_TOP | DT_WORDBREAK);
+            const RECT area = CaptureRect(hwnd);
+
+            HBRUSH background = CreateSolidBrush(
+                g_captureEnabled ? RGB(245, 252, 245) : RGB(248, 248, 248));
+            FillRect(dc, &area, background);
+            DeleteObject(background);
+
+            HPEN border = CreatePen(
+                PS_SOLID,
+                2,
+                g_captureEnabled ? RGB(40, 130, 70) : RGB(120, 120, 120));
+            HGDIOBJ oldPen = SelectObject(dc, border);
+            HGDIOBJ oldBrush = SelectObject(dc, GetStockObject(NULL_BRUSH));
+            Rectangle(dc, area.left, area.top, area.right, area.bottom);
+            SelectObject(dc, oldBrush);
+            SelectObject(dc, oldPen);
+            DeleteObject(border);
+
+            TextOutW(
+                dc,
+                area.left + 16,
+                area.top + 14,
+                L"ÁREA DE TESTE DA CANETA",
+                23);
+
+            DrawLabelValue(
+                dc,
+                area.left + 16,
+                area.top + 48,
+                L"Status",
+                g_status);
+
+            DrawLabelValue(
+                dc,
+                area.left + 16,
+                area.top + 78,
+                L"Pointer",
+                g_pointerFlags);
+
+            DrawLabelValue(
+                dc,
+                area.left + 16,
+                area.top + 108,
+                L"Pen flags",
+                g_penFlags);
+
+            DrawLabelValue(
+                dc,
+                area.left + 16,
+                area.top + 138,
+                L"Pressão",
+                std::to_wstring(g_pressure));
+
+            DrawLabelValue(
+                dc,
+                area.left + 220,
+                area.top + 138,
+                L"Tilt X/Y",
+                std::to_wstring(g_tiltX) +
+                    L" / " +
+                    std::to_wstring(g_tiltY));
+
+            DrawLabelValue(
+                dc,
+                area.left + 430,
+                area.top + 138,
+                L"Eventos",
+                std::to_wstring(g_eventCount));
+
+            std::wstring rawPreview = g_latestRaw;
+            if (rawPreview.size() > 110) {
+                rawPreview.resize(110);
+                rawPreview += L"...";
+            }
+
+            DrawLabelValue(
+                dc,
+                area.left + 16,
+                area.top + 168,
+                L"Último HID RAW",
+                rawPreview);
 
             EndPaint(hwnd, &ps);
             return 0;
         }
 
+        case WM_CLOSE:
+            if (g_captureEnabled) {
+                StopCapture(hwnd, false);
+            }
+            DestroyWindow(hwnd);
+            return 0;
+
         case WM_DESTROY:
+            CloseLog();
             PostQuitMessage(0);
             return 0;
 
         default:
-            return DefWindowProcW(hwnd, message, wParam, lParam);
+            break;
     }
+
+    return DefWindowProcW(hwnd, message, wParam, lParam);
 }
 
 } // namespace
 
-int wmain() {
-    SetConsoleOutputCP(CP_UTF8);
+int WINAPI wWinMain(
+    HINSTANCE instance,
+    HINSTANCE,
+    PWSTR,
+    int showCommand) {
 
-    const std::string filename = LogFilename();
-    g_log.open(filename, std::ios::out | std::ios::trunc);
-    if (!g_log) {
-        std::cerr << "Não foi possível criar o arquivo de log.\n";
-        return 1;
-    }
-    WriteHeader();
-
-    std::cout << "Galaxy Pen Event Monitor - P002\n";
-    std::cout << "Log: " << filename << "\n";
-    std::cout << "Feche a janela do monitor para encerrar.\n";
-
-    const wchar_t* className = L"GalaxyPenEventMonitorWindow";
+    const wchar_t* className =
+        L"GalaxyPenEventMonitorWindow";
 
     WNDCLASSW wc{};
     wc.lpfnWndProc = WindowProc;
-    wc.hInstance = GetModuleHandleW(nullptr);
+    wc.hInstance = instance;
     wc.lpszClassName = className;
     wc.hCursor = LoadCursorW(nullptr, IDC_CROSS);
-    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wc.hbrBackground =
+        reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
 
     if (!RegisterClassW(&wc)) {
-        std::wcerr << L"RegisterClassW falhou: " << GetLastError() << L"\n";
+        MessageBoxW(
+            nullptr,
+            L"Não foi possível registrar a janela do monitor.",
+            L"Galaxy Pen Event Monitor",
+            MB_OK | MB_ICONERROR);
         return 1;
     }
 
     HWND hwnd = CreateWindowExW(
         0,
         className,
-        L"Galaxy Pen Event Monitor - P002",
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+        L"Galaxy Pen Event Monitor - P002.1",
+        WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        960,
-        640,
+        1000,
+        720,
         nullptr,
         nullptr,
-        wc.hInstance,
+        instance,
         nullptr);
 
     if (!hwnd) {
-        std::wcerr << L"CreateWindowExW falhou: " << GetLastError() << L"\n";
+        MessageBoxW(
+            nullptr,
+            L"Não foi possível criar a janela do monitor.",
+            L"Galaxy Pen Event Monitor",
+            MB_OK | MB_ICONERROR);
         return 1;
     }
+
+    ShowWindow(hwnd, showCommand);
+    UpdateWindow(hwnd);
 
     MSG msg{};
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
@@ -410,10 +778,5 @@ int wmain() {
         DispatchMessageW(&msg);
     }
 
-    g_log.flush();
-    g_log.close();
-
-    std::cout << "Captura finalizada. Eventos registrados: " << g_eventCount << "\n";
-    std::cout << "Arquivo salvo em: " << filename << "\n";
-    return 0;
+    return static_cast<int>(msg.wParam);
 }
