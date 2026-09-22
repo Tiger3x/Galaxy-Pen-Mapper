@@ -4,6 +4,8 @@
 #include <hidusage.h>
 
 #include <chrono>
+#include <cstring>
+#include <ctime>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -132,7 +134,7 @@ std::string PointerFlagsText(UINT32 flags) {
 std::string PenFlagsText(PEN_FLAGS flags) {
     std::ostringstream out;
     bool first = true;
-    const auto append = [&](const char* value) mutable {
+    auto append = [&](const char* value) {
         if (!first) out << '|';
         out << value;
         first = false;
@@ -244,8 +246,11 @@ void LogPenPointer(UINT message, WPARAM wParam, HWND hwnd) {
 
     ++g_eventCount;
 
+    const std::string eventText(eventName);
+    const std::wstring eventWide(eventText.begin(), eventText.end());
+
     std::wostringstream status;
-    status << L"CANETA  |  " << std::wstring(eventName, eventName + std::strlen(eventName))
+    status << L"CANETA  |  " << eventWide
            << L"  |  pressão " << pressure
            << L"  |  tilt " << tiltX << L"," << tiltY
            << L"  |  eventos: " << g_eventCount;
