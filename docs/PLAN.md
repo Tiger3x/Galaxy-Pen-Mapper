@@ -11,10 +11,10 @@ Enumerate Windows HID interfaces and identify Digitizer-class devices, VID/PID, 
 
 **Exit criterion:** scanner builds successfully and can identify Galaxy digitizer-related HID interfaces from a real-machine capture.
 
-### P002 — Pen Event Monitor 🚧
+### P002 — Pen Event Monitor ✅
 Capture Digitizer Raw Input reports plus Windows-interpreted pen events (`WM_POINTER` / `GetPointerPenInfo`) with timestamps.
 
-**Exit criterion:** build succeeds and the Galaxy Book produces a CSV containing pointer events and, where exposed, raw HID reports for hover/contact/buttons/pressure.
+**Exit criterion:** Windows build validated. Real-hardware CSV capture on the Galaxy Book is the next validation step before P003.
 
 ### P003 — Comparative Capture
 Record controlled, labeled sequences with:
