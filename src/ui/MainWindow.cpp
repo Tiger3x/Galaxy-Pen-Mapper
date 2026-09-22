@@ -7,6 +7,8 @@ namespace {
 constexpr int kStartCapture = 1001;
 constexpr int kStopCapture = 1002;
 constexpr int kClearPanel = 1003;
+constexpr UINT_PTR kRefreshTimer = 1;
+constexpr UINT kRefreshIntervalMs = 16;
 
 void setDefaultFont(HWND control) {
     SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
@@ -35,7 +37,8 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
 
     if (!RegisterClassW(&windowClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
 
-    HWND window = CreateWindowExW(0, className, L"Galaxy Pen Diagnostic Studio — P002.3", WS_OVERLAPPEDWINDOW,
+    HWND window = CreateWindowExW(0, className, L"Galaxy Pen Diagnostic Studio — P002.3",
+                                  WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                                   CW_USEDEFAULT, CW_USEDEFAULT, 1000, 720, nullptr, nullptr, instance, this);
     if (!window) return false;
     ShowWindow(window, showCommand);
@@ -58,12 +61,13 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             createControls(window);
             penCapture.initialize(window);
             if (!rawHidCapture.initialize(window)) status = L"Raw HID não pôde ser registrado; WM_POINTER continua disponível.";
+            SetTimer(window, kRefreshTimer, kRefreshIntervalMs, nullptr);
             return 0;
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
                 case kStartCapture: startCapture(window); return 0;
-                case kStopCapture: stopCapture(); InvalidateRect(window, nullptr, TRUE); return 0;
-                case kClearPanel: clearPanel(); InvalidateRect(window, nullptr, TRUE); return 0;
+                case kStopCapture: stopCapture(); scheduleRepaint(); return 0;
+                case kClearPanel: clearPanel(); scheduleRepaint(); return 0;
                 default: break;
             }
             break;
@@ -77,13 +81,13 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                         ++eventCount;
                     }
                 }
-                InvalidateRect(window, nullptr, FALSE);
+                scheduleRepaint();
             }
             return DefWindowProcW(window, message, wParam, lParam);
         }
         case WM_INPUT_DEVICE_CHANGE:
             status = wParam == GIDC_ARRIVAL ? L"Dispositivo de entrada conectado." : L"Dispositivo de entrada removido.";
-            InvalidateRect(window, nullptr, FALSE);
+            scheduleRepaint();
             return 0;
         case WM_POINTERDOWN:
         case WM_POINTERUP:
@@ -99,19 +103,48 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                 sessionWriter.writePointer(pointerEventName(message), penCapture.state());
                 ++eventCount;
             }
-            InvalidateRect(window, nullptr, FALSE);
+            scheduleRepaint();
             return DefWindowProcW(window, message, wParam, lParam);
         }
         case WM_ACTIVATE:
             if (LOWORD(wParam) == WA_INACTIVE && recording) {
                 status = L"Captura pausada: a janela precisa ficar em primeiro plano.";
+                scheduleRepaint();
+            }
+            return 0;
+        case WM_TIMER:
+            if (wParam == kRefreshTimer && repaintPending) {
+                repaintPending = false;
                 InvalidateRect(window, nullptr, FALSE);
             }
             return 0;
+        case WM_SIZE:
+            scheduleRepaint();
+            return 0;
+        case WM_ERASEBKGND:
+            return 1;
         case WM_PAINT: {
             PAINTSTRUCT paint{};
             HDC dc = BeginPaint(window, &paint);
-            panel.draw(dc, window, penCapture.state(), eventCount, recording, penInside, status, latestRaw);
+
+            RECT client{};
+            GetClientRect(window, &client);
+            const int width = client.right - client.left;
+            const int height = client.bottom - client.top;
+            HDC buffer = width > 0 && height > 0 ? CreateCompatibleDC(dc) : nullptr;
+            HBITMAP bitmap = buffer ? CreateCompatibleBitmap(dc, width, height) : nullptr;
+
+            if (buffer && bitmap) {
+                HGDIOBJ previousBitmap = SelectObject(buffer, bitmap);
+                panel.draw(buffer, window, penCapture.state(), eventCount, recording, penInside, status, latestRaw);
+                BitBlt(dc, 0, 0, width, height, buffer, 0, 0, SRCCOPY);
+                SelectObject(buffer, previousBitmap);
+            } else {
+                panel.draw(dc, window, penCapture.state(), eventCount, recording, penInside, status, latestRaw);
+            }
+
+            if (bitmap) DeleteObject(bitmap);
+            if (buffer) DeleteDC(buffer);
             EndPaint(window, &paint);
             return 0;
         }
@@ -120,6 +153,7 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             DestroyWindow(window);
             return 0;
         case WM_DESTROY:
+            KillTimer(window, kRefreshTimer);
             sessionWriter.stop();
             PostQuitMessage(0);
             return 0;
@@ -133,9 +167,9 @@ void MainWindow::createControls(HWND window) {
     sessionBox = CreateWindowExW(0, L"EDIT", L"S_Pen", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL, 32, 104, 210, 28, window, nullptr, nullptr, nullptr);
     CreateWindowW(L"STATIC", L"Descrição", WS_CHILD | WS_VISIBLE, 260, 84, 150, 18, window, nullptr, nullptr, nullptr);
     descriptionBox = CreateWindowExW(0, L"EDIT", L"Teste controlado", WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL, 260, 104, 250, 28, window, nullptr, nullptr, nullptr);
-    HWND start = CreateWindowW(L"BUTTON", L"Iniciar captura", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 530, 103, 142, 30, window, reinterpret_cast<HMENU>(kStartCapture), nullptr, nullptr);
-    HWND stop = CreateWindowW(L"BUTTON", L"Parar", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 682, 103, 100, 30, window, reinterpret_cast<HMENU>(kStopCapture), nullptr, nullptr);
-    HWND clear = CreateWindowW(L"BUTTON", L"Limpar painel", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 792, 103, 140, 30, window, reinterpret_cast<HMENU>(kClearPanel), nullptr, nullptr);
+    HWND start = CreateWindowW(L"BUTTON", L"Iniciar captura", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 530, 103, 142, 30, window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kStartCapture)), nullptr, nullptr);
+    HWND stop = CreateWindowW(L"BUTTON", L"Parar", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 682, 103, 100, 30, window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kStopCapture)), nullptr, nullptr);
+    HWND clear = CreateWindowW(L"BUTTON", L"Limpar painel", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 792, 103, 140, 30, window, reinterpret_cast<HMENU>(static_cast<INT_PTR>(kClearPanel)), nullptr, nullptr);
     for (HWND control : {sessionBox, descriptionBox, start, stop, clear}) setDefaultFont(control);
 }
 
@@ -147,7 +181,7 @@ void MainWindow::startCapture(HWND window) {
         status = L"Gravando. O CSV será salvo na pasta captures.";
         SetFocus(window);
     } else status = L"Não foi possível criar o CSV de captura.";
-    InvalidateRect(window, nullptr, TRUE);
+    scheduleRepaint();
 }
 
 void MainWindow::stopCapture() {
@@ -163,6 +197,10 @@ void MainWindow::clearPanel() {
     latestRaw.clear();
     penCapture.clear();
     status = recording ? L"Gravando. Painel limpo." : L"Painel limpo. Pronto para nova captura.";
+}
+
+void MainWindow::scheduleRepaint() {
+    repaintPending = true;
 }
 
 std::wstring MainWindow::controlText(HWND control) const {

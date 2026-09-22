@@ -20,6 +20,7 @@ private:
     void startCapture(HWND window);
     void stopCapture();
     void clearPanel();
+    void scheduleRepaint();
     std::wstring controlText(HWND control) const;
     bool canRecord(HWND window) const;
 
@@ -27,6 +28,7 @@ private:
     HWND descriptionBox = nullptr;
     bool recording = false;
     bool penInside = false;
+    bool repaintPending = true;
     unsigned long long eventCount = 0;
     std::wstring status = L"Pronto para uma captura de diagnóstico.";
     std::wstring latestRaw;
