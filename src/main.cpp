@@ -3,9 +3,12 @@
 #include <hidsdi.h>
 #include <hidpi.h>
 
+#include <algorithm>
+#include <cwctype>
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #pragma comment(lib, "setupapi.lib")
@@ -63,11 +66,45 @@ bool IsDigitizer(const HIDP_CAPS& caps) {
     return caps.UsagePage == 0x0D;
 }
 
+void PrintInputCapabilities(PHIDP_PREPARSED_DATA preparsed, const HIDP_CAPS& caps) {
+    USHORT valueCount = caps.NumberInputValueCaps;
+    std::vector<HIDP_VALUE_CAPS> values(valueCount);
+    if (valueCount != 0 && HidP_GetValueCaps(HidP_Input, values.data(), &valueCount, preparsed) == HIDP_STATUS_SUCCESS) {
+        for (USHORT index = 0; index < valueCount; ++index) {
+            const auto& value = values[index];
+            std::wcout << L"  Input value " << index << L": report=0x" << std::hex
+                       << static_cast<unsigned>(value.ReportID) << L", page=0x" << value.UsagePage
+                       << L", usage=0x" << (value.IsRange ? value.Range.UsageMin : value.NotRange.Usage)
+                       << std::dec;
+            if (value.IsRange) std::wcout << L"..0x" << std::hex << value.Range.UsageMax << std::dec;
+            std::wcout << L", logical=" << value.LogicalMin << L".." << value.LogicalMax
+                       << L", physical=" << value.PhysicalMin << L".." << value.PhysicalMax
+                       << L", bits=" << value.BitSize << L", count=" << value.ReportCount
+                       << L", link=" << value.LinkCollection << L"\n";
+        }
+    }
+
+    USHORT buttonCount = caps.NumberInputButtonCaps;
+    std::vector<HIDP_BUTTON_CAPS> buttons(buttonCount);
+    if (buttonCount != 0 && HidP_GetButtonCaps(HidP_Input, buttons.data(), &buttonCount, preparsed) == HIDP_STATUS_SUCCESS) {
+        for (USHORT index = 0; index < buttonCount; ++index) {
+            const auto& button = buttons[index];
+            std::wcout << L"  Input button " << index << L": report=0x" << std::hex
+                       << static_cast<unsigned>(button.ReportID) << L", page=0x" << button.UsagePage
+                       << L", usage=0x" << (button.IsRange ? button.Range.UsageMin : button.NotRange.Usage)
+                       << std::dec;
+            if (button.IsRange) std::wcout << L"..0x" << std::hex << button.Range.UsageMax << std::dec;
+            std::wcout << L", link=" << button.LinkCollection << L"\n";
+        }
+    }
+}
+
 void PrintDevice(
     DWORD index,
     const std::wstring& path,
     const std::wstring& description,
-    HANDLE device) {
+    HANDLE device,
+    bool detailed) {
     std::wcout << L"\n============================================================\n";
     std::wcout << L"[" << index << L"] " << (description.empty() ? L"(sem descrição)" : description) << L"\n";
     std::wcout << L"Path: " << path << L"\n";
@@ -111,6 +148,7 @@ void PrintDevice(
         if (IsDigitizer(caps)) {
             std::wcout << L"  >>> CANDIDATO DIGITIZER (Usage Page 0x0D) <<<\n";
         }
+        if (detailed) PrintInputCapabilities(preparsed, caps);
     } else {
         std::wcout << L"  HidP_GetCaps falhou: 0x"
                    << std::hex << static_cast<unsigned long>(status) << std::dec << L"\n";
@@ -121,8 +159,13 @@ void PrintDevice(
 
 } // namespace
 
-int wmain() {
+int wmain(int argc, wchar_t** argv) {
     SetConsoleOutputCP(CP_UTF8);
+    const bool detailedPen = argc == 2 && std::wstring_view(argv[1]) == L"--wcom-pen-caps";
+    if (argc != 1 && !detailedPen) {
+        std::wcerr << L"Uso: GalaxyPenHidScanner.exe [--wcom-pen-caps]\n";
+        return 2;
+    }
 
     GUID hidGuid{};
     HidD_GetHidGuid(&hidGuid);
@@ -174,6 +217,13 @@ int wmain() {
             continue;
         }
 
+        if (detailedPen) {
+            std::wstring path = detail->DevicePath;
+            std::transform(path.begin(), path.end(), path.begin(), [](wchar_t ch) { return std::towlower(ch); });
+            if (path.find(L"wcom016c&col01") == std::wstring::npos &&
+                path.find(L"wcom016c&col04") == std::wstring::npos) continue;
+        }
+
         std::wstring description =
             ReadRegistryString(devices, deviceInfo, SPDRP_FRIENDLYNAME);
         if (description.empty()) {
@@ -197,7 +247,7 @@ int wmain() {
             continue;
         }
 
-        PrintDevice(index, detail->DevicePath, description, handle);
+        PrintDevice(index, detail->DevicePath, description, handle, detailedPen);
         CloseHandle(handle);
         ++found;
     }
@@ -206,7 +256,8 @@ int wmain() {
 
     std::wcout << L"\n============================================================\n";
     std::wcout << L"HIDs abertos e analisados: " << found << L"\n";
-    std::wcout << L"Procure especialmente por entradas marcadas como CANDIDATO DIGITIZER.\n";
+    if (detailedPen) std::wcout << L"Consulta somente leitura às coleções WCOM016C&COL01 e COL04.\n";
+    else std::wcout << L"Procure especialmente por entradas marcadas como CANDIDATO DIGITIZER.\n";
 
-    return 0;
+    return detailedPen && found == 0 ? 1 : 0;
 }

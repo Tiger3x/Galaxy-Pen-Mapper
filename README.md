@@ -10,7 +10,9 @@ The first hardware target is the **Huion PW500** (from the HS611) used directly 
 - **P002 — Pen Event Monitor: implemented and build-validated (P002.6)**
 - **P003 — Comparative Capture: completed with four hardware paths**
 - **P004 — Input Classification: completed; HS611 button-time tip interruption recorded as established behavior**
-- **P005A — Tip-first pen-pattern probe: implemented; prospective on-device validation pending**
+- **P005A — Tip-first pen-pattern probe: implemented; existing captures suffice for the next gate**
+- **P005B — Input isolation: reviewed; no reliable general-desktop user-mode replacement path identified**
+- **P007 — Driver-path architecture review: next, with no driver installation or device changes**
 
 ### P001 — GalaxyPenHidScanner.exe
 
@@ -62,3 +64,4 @@ build-ninja\GalaxyPenEventMonitor.exe
 - [P004 — Input Classification](docs/P004-INPUT-CLASSIFICATION.md)
 - [P005 — PW500 screen-button verification](docs/P005-SCREEN-BUTTON-TEST.md)
 - [P005A — Tip-first pen-pattern probe and test](docs/P005A-PEN-SIGNATURE.md)
+- [P005B — Original-input isolation review](docs/P005B-INPUT-ISOLATION.md)

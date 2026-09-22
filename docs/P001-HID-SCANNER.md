@@ -14,6 +14,8 @@ Enumerate HID interfaces visible to Windows and locate the Galaxy Book3 360 digi
 - input/output/feature report lengths;
 - input value/button capability counts.
 
+With `--wcom-pen-caps`, the scanner restricts output to the Galaxy WCOM `COL01` and `COL04` interfaces and prints their input value/button capabilities, including report IDs, usages, logical ranges and bit widths. This mode only reads HID descriptors; it does not change a device.
+
 Usage Page `0x0D` is highlighted because it is the HID Digitizers page.
 
 ## Important limitation
@@ -35,3 +37,9 @@ Send/save the complete output, especially every entry marked:
 ```
 
 No driver changes are made by this program.
+
+For the focused, read-only WCOM collection inventory used by P007:
+
+```powershell
+.\build-ninja\GalaxyPenHidScanner.exe --wcom-pen-caps
+```
