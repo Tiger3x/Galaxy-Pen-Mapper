@@ -2,7 +2,7 @@
 
 ## Capturas analisadas
 
-As quatro sessões comparativas iniciais e 14 sessões direcionadas foram gravadas pelo Galaxy Pen Diagnostic Studio:
+As quatro sessões comparativas iniciais e 15 sessões direcionadas foram gravadas pelo Galaxy Pen Diagnostic Studio:
 
 | Sessão | Caminho | Dispositivo Raw principal | Report ID |
 | --- | --- | --- | --- |
@@ -96,6 +96,12 @@ Cada evento injetado aparece tanto no Raw Input quanto na mensagem da janela; s�
 
 Nos dois testes com ponta, houve 42 ciclos `0x02→0x03→0x02` no relatório bruto e 42 pares `POINTER_DOWN`/`POINTER_UP`, acompanhados de 42 pares de clique esquerdo com origem `IMDT_PEN=8`, `IMO_HARDWARE=1`. Essas transições são anteriores à tradução dos botões em tecla ou clique direito. Os arquivos, por si, não mostram se o contato foi levantado fisicamente ou se oscilou perto do limiar enquanto a ponta era mantida apoiada; a pressão chegou a valores brutos tão baixos quanto `1`. Isso deve ser verificado separadamente antes de atribuir os cliques esquerdos extras ao driver ou aos botões.
 
+### P004C — ponta contínua e depois botões
+
+Em `pen-events-20260922-174526.csv`, identificado como `P004C_HS611_DRIVER_TIP_STEADY`, a primeira fase da ponta gerou um único contato Raw `0x05/0x03` de `17:45:29.433` a `17:45:57.575` (28,14 s; 6.516 relatórios) e um par `POINTER_DOWN`/`POINTER_UP`. No trecho central de 24 s, todos os 5.558 relatórios da HS611 permaneceram em contato; a pressão bruta teve mediana de `2768` e variou de `1116` a `3205`. Portanto, os ciclos repetidos dos testes anteriores **não são uma oscilação espontânea inevitável** durante um contato estável sem botões.
+
+Após essa fase, o arquivo registra mais 14 contatos Raw, de cerca de `0,10` a `1,12` s cada, além de três acionamentos de `E` e seis cliques direitos injetados pelo driver. Os acionamentos dos botões ocorrem próximos de várias transições Raw entre `0x03` e `0x02`; algumas passagens a hover são abruptas, enquanto outras mostram queda gradual da pressão. Também há intervalos sem botão registrado e uma pausa de cerca de 5,6 s entre o fim do primeiro contato e o primeiro `E`. Sem uma marcação física independente de quando a ponta saiu da mesa, a captura demonstra a correlação temporal, mas não prova se cada interrupção foi causada pelo botão, pelo driver ou por levantamento/reacomodação da caneta.
+
 ## Estado da P004
 
 Confirmado:
@@ -108,15 +114,16 @@ Confirmado:
 - segundo botão da HS611 sem driver gerando contato com pressão zero;
 - transformação do protocolo Raw HID pelo driver Huion;
 - ausência dos dois botões na coleção Digitizer exposta pelo driver Huion;
-- encaminhamento do botão 1 para `E` e do botão 2 para clique direito pelo driver, ambos como entrada injetada.
+- encaminhamento do botão 1 para `E` e do botão 2 para clique direito pelo driver, ambos como entrada injetada;
+- estabilidade de um contato de 28,14 s sem botões na HS611 com driver; os ciclos curtos posteriores estão associados temporalmente à fase de botões, mas sua causa física exata ainda não foi isolada.
 
 Pontos separados da classificação principal:
 
 - distinguir os bytes restantes de tilt e distância/proximidade, se um recurso futuro precisar deles;
-- isolar a causa dos ciclos de contato bruto observados nos testes de ponta + botão com uma captura de contato contínuo sem pressionar botões.
+- confirmar se a ponta permaneceu fisicamente encostada durante os acionamentos da fase P004C e, se necessário, marcar pressões e levantamentos para distinguir o driver de mudanças no contato físico.
 
 ## Implicação para a P005
 
-Um remapeador em modo usuário pode detectar e amortecer as recriações indevidas de contato quando correlacionar `WM_POINTER` com o Raw HID contínuo. Ele não pode reconstruir o curso real da PW500 diretamente na tela: a maior parte do sinal já chega comprimida ou saturada. Para esse caminho, as opções são inverter e reescalar a faixa residual com qualidade limitada, usar pressão simulada ou aceitar pressão quase binária.
+Um programa em modo usuário pode detectar as recriações indevidas de contato ao correlacionar `WM_POINTER` com o Raw HID contínuo. Essa observação ainda não demonstra que ele consiga impedir os eventos originais em outros aplicativos. Também não pode reconstruir o curso real da PW500 diretamente na tela: a maior parte do sinal já chega comprimida ou saturada. Somente depois de demonstrar a substituição do fluxo original, faria sentido experimentar inverter e reescalar a faixa residual com qualidade limitada, usar pressão simulada ou aceitar pressão quase binária.
 
 Na HS611 com driver, a P005 pode identificar as saídas configuradas dos botões pelo teclado ou mouse injetado. Mapear ambos para teclas pouco usadas e distintas, se o driver permitir, facilitaria distinguir os dois botões de atalhos comuns. A configuração atual já foi suficiente para determinar o caminho de cada botão.

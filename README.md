@@ -24,9 +24,9 @@ Native window-only test bench. Captures:
 - Raw Mouse, Raw Keyboard and synthesized window input, including Windows input-source metadata;
 - pressure, tilt, buttons/pen flags, coordinates and timestamps;
 - CSV logs for later S Pen vs PW500 comparison;
-- pen events only inside the bordered test area; system input channels while capture is enabled and the window is active.
+- interpreted pen events inside the bordered test area; Raw HID, mouse and keyboard events while capture is enabled and the window is active.
 
-> A passive EMR pen normally does not enumerate as a separate USB/HID device on the display. The digitizer is the HID device; P002 observes how that digitizer reports each pen.
+> A passive EMR pen normally does not enumerate as a separate USB/HID device on the display. The digitizer is the HID device; P002 observes how that digitizer reports each pen. The current captures show that the PW500's true pressure range cannot be recovered from the Galaxy display reports.
 
 ## Build
 
@@ -34,18 +34,20 @@ Requirements:
 
 - Windows 10/11
 - Visual Studio 2022 or Build Tools with Desktop development with C++
-- CMake 3.21+
+- CMake 3.21+ and Ninja (both included in the installed Visual Studio Build Tools)
 
-```powershell
-cmake -S . -B build -A x64
-cmake --build build --config Release
+From an x64 Visual Studio developer command prompt with CMake and Ninja available:
+
+```text
+cmake -S . -B build-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-ninja
 ```
 
 Executables:
 
 ```text
-build\Release\GalaxyPenHidScanner.exe
-build\Release\GalaxyPenEventMonitor.exe
+build-ninja\GalaxyPenHidScanner.exe
+build-ninja\GalaxyPenEventMonitor.exe
 ```
 
 ## Documentation

@@ -25,7 +25,7 @@ The Samsung S Pen and Huion PW500 are passive EMR pens. They are not expected to
 Build Release and run:
 
 ```powershell
-.\build\Release\GalaxyPenHidScanner.exe | Tee-Object -FilePath hid-scan.txt
+.\build-ninja\GalaxyPenHidScanner.exe | Tee-Object -FilePath hid-scan.txt
 ```
 
 Send/save the complete output, especially every entry marked:
