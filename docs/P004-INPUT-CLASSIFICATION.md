@@ -51,6 +51,8 @@ Com a ponta apoiada, as duas repetições produziram o resultado decisivo. Em ca
 
 Os dois botões apresentaram o mesmo comportamento no caminho WCOM e não puderam ser diferenciados por um bit Raw HID. A recriação do contato explica cliques extras, duplo clique e interrupções percebidas como “desativar” a caneta.
 
+O usuário atribui o gatilho físico dessa mudança à própria PW500 quando um botão é pressionado. A captura do computador não observa o sinal EMR diretamente: ela observa a saída do digitizador. Nessa saída WCOM, a ponta ainda aparece em contato (`0x2C`, pressão não nula) ao redor das recriações de `WM_POINTER`. Portanto, “a ponta desativa na tela” descreve corretamente o efeito percebido no Windows, mas não significa que o bit de contato bruto da tela tenha desligado nesses instantes.
+
 ### HS611 sem driver — relatório `0x0A`
 
 | Byte 1 | Estado observado | Resultado no Windows |
@@ -94,7 +96,7 @@ O usuário configurou o botão 1 como tecla `E` e o botão 2 como clique direito
 
 Cada evento injetado aparece tanto no Raw Input quanto na mensagem da janela; são duas observações do mesmo acionamento, não dois acionamentos independentes. Os valores `IMDT_KEYBOARD=1`, `IMDT_MOUSE=2` e `IMO_INJECTED=2` foram conferidos no SDK do Windows instalado. O monitor não encontra um `hDevice` físico nos eventos Raw Keyboard/Mouse sintetizados; por isso o campo `device` fica vazio. A configuração fornecida pelo usuário é necessária para atribuir `E` ao botão 1 e clique direito ao botão 2.
 
-Nos dois testes com ponta, houve 42 ciclos `0x02→0x03→0x02` no relatório bruto e 42 pares `POINTER_DOWN`/`POINTER_UP`, acompanhados de 42 pares de clique esquerdo com origem `IMDT_PEN=8`, `IMO_HARDWARE=1`. Essas transições são anteriores à tradução dos botões em tecla ou clique direito. Os arquivos, por si, não mostram se o contato foi levantado fisicamente ou se oscilou perto do limiar enquanto a ponta era mantida apoiada; a pressão chegou a valores brutos tão baixos quanto `1`. Isso deve ser verificado separadamente antes de atribuir os cliques esquerdos extras ao driver ou aos botões.
+Nos dois testes com ponta, houve 42 ciclos `0x02→0x03→0x02` no relatório bruto e 42 pares `POINTER_DOWN`/`POINTER_UP`, acompanhados de 42 pares de clique esquerdo com origem `IMDT_PEN=8`, `IMO_HARDWARE=1`. Essas transições são anteriores à tradução dos botões em tecla ou clique direito. Esses dois arquivos, isoladamente, não registram o estado físico da ponta; a captura P004C e a confirmação do usuário fornecem esse contexto adicional.
 
 ### P004C — ponta contínua e depois botões
 
@@ -102,9 +104,9 @@ Em `pen-events-20260922-174526.csv`, identificado como `P004C_HS611_DRIVER_TIP_S
 
 Após essa fase, o arquivo registra mais 14 contatos Raw, de cerca de `0,10` a `1,12` s cada, além de três acionamentos de `E` e seis cliques direitos injetados pelo driver. O usuário confirmou que **levantou intencionalmente a caneta** após o contato longo e voltou a apoiá-la antes de usar os botões. Portanto, a pausa inicial não é uma falha. Confirmou também que, durante os acionamentos dos dois botões, **manteve a ponta fisicamente encostada na mesa**.
 
-Na fase do botão 1, as três liberações de `E` ocorreram a `5`, `2` e `2` ms das respectivas transições Raw `0x03→0x02`. As seis transições Raw mais próximas dos cliques direitos ocorreram de `37` a `35` ms antes ou de `1` a `153` ms depois do início desses cliques. Em três delas, a pressão bruta imediatamente antes da perda de contato ainda era `1847`–`2502`, em vez de diminuir gradualmente até zero. Logo, a perda de contato durante os acionamentos não é apenas uma recriação de `WM_POINTER`: ela já aparece na coleção Digitizer `0x05` exposta pela HS611 com driver, apesar da ponta apoiada. Os dois contatos curtos anteriores ao primeiro `E` não devem ser classificados como falha dos botões.
+Na fase do botão 1, as três liberações de `E` ocorreram a `5`, `2` e `2` ms das respectivas transições Raw `0x03→0x02`. As seis transições Raw mais próximas dos cliques direitos ocorreram de `37` a `35` ms antes ou de `1` a `153` ms depois do início desses cliques. Em três delas, a pressão bruta imediatamente antes da perda de contato ainda era `1847`–`2502`, em vez de diminuir gradualmente até zero. Logo, a perda de contato durante os acionamentos não é apenas uma recriação de `WM_POINTER`: ela já aparece na coleção Digitizer `0x05` exposta pela HS611 com driver, apesar da ponta apoiada. Os dois contatos curtos anteriores ao primeiro `E` não devem ser atribuídos à ação dos botões.
 
-O usuário propôs que o driver suprima propositalmente a ponta para dar prioridade à ação do botão. O sincronismo e algumas quedas abruptas são **compatíveis com essa hipótese**, mas o monitor observa a coleção já exposta pelo driver, não o sinal anterior a ele. Portanto, ainda não é possível demonstrar a intenção do driver nem separar definitivamente essa hipótese de uma mudança de força causada pelo acionamento, da caneta ou do hardware da mesa.
+O usuário relata que esse comportamento da HS611 sempre ocorreu em seu uso prolongado e o considera **normal, não um defeito**. Ele atribui a mudança inicial à própria PW500 ao pressionar o botão: suspender a ação da ponta daria prioridade a `E` ou clique direito e evitaria uma combinação indesejada de tecla com clique/arrasto no aplicativo. O sincronismo e algumas quedas abruptas são compatíveis com essa explicação. O monitor, porém, observa apenas os relatórios após processamento pela mesa e pelo driver, não o sinal EMR emitido pela caneta; por isso não consegue atribuir exclusivamente a ela o desligamento interno da ponta. O resultado observado difere por caminho: na HS611 com driver o Raw `0x05` perde contato, enquanto na tela WCOM o Raw `0x02/0x2C` permanece em contato ao redor da interrupção lógica no Windows. Não há motivo para tratar o comportamento habitual da HS611 como falha a corrigir no escopo atual.
 
 ## Estado da P004
 
@@ -125,7 +127,7 @@ Confirmado:
 Pontos separados da classificação principal:
 
 - distinguir os bytes restantes de tilt e distância/proximidade, se um recurso futuro precisar deles;
-- separar, se necessário para uma correção futura, a contribuição da caneta, da mesa, da força aplicada ao botão e do driver Huion. A classificação dos canais de entrada e o controle de contato estável da P004 estão concluídos.
+- investigar o mecanismo interno da pausa de contato da HS611 somente se um requisito futuro pedir contato contínuo durante a ação do botão. A classificação dos canais de entrada e o controle de contato estável da P004 estão concluídos.
 
 ## Implicação para a P005
 
