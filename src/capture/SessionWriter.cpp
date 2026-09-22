@@ -1,6 +1,7 @@
 #include "SessionWriter.h"
 
 #include <chrono>
+#include <array>
 #include <ctime>
 #include <iomanip>
 #include <sstream>
@@ -40,6 +41,14 @@ std::string timestamp(const char* format) {
     return result.str();
 }
 
+void writeRow(std::ostream& output, const std::array<std::string, 33>& fields) {
+    for (size_t index = 0; index < fields.size(); ++index) {
+        if (index != 0) output << ',';
+        output << csv(fields[index]);
+    }
+    output << '\n';
+}
+
 } // namespace
 
 bool SessionWriter::start(const std::wstring& name, const std::wstring& details) {
@@ -56,7 +65,7 @@ bool SessionWriter::start(const std::wstring& name, const std::wstring& details)
     output.open(outputPath, std::ios::out | std::ios::trunc);
     if (!output) return false;
 
-    output << "session,description,timestamp,event,device,vid,pid,usage_page,usage,report_index,raw_hex,pointer_id,pointer_flags,pen_flags,pressure,tilt_x,tilt_y,rotation,x,y\n";
+    output << "session,description,timestamp,event,device,vid,pid,usage_page,usage,report_index,raw_hex,pointer_id,pointer_flags,pen_flags,pressure,tilt_x,tilt_y,rotation,x,y,input_source_device,input_source_origin,message_wparam,message_lparam,mouse_flags,mouse_button_flags,mouse_button_data,mouse_dx,mouse_dy,key_make_code,key_flags,key_vkey,raw_extra_information\n";
     output << csv(session) << ',' << csv(description) << ',' << csv(timestamp("%Y-%m-%d %H:%M:%S")) << ",SESSION_START,,,,,,,,,,,,,,,,,\n";
     output.flush();
     return true;
@@ -79,6 +88,62 @@ void SessionWriter::writeRaw(const RawHidReport& report) {
            << report.usagePage << ',' << report.usage << ',' << report.reportIndex << ',' << csv(report.bytes)
            << ",,,,,,,,,,\n";
     output.flush();
+}
+
+void SessionWriter::writeRawMouse(const RawMouseEvent& event) {
+    if (!active()) return;
+    std::array<std::string, 33> fields{};
+    fields[0] = session;
+    fields[1] = description;
+    fields[2] = timestamp("%Y-%m-%d %H:%M:%S");
+    fields[3] = "RAW_MOUSE";
+    fields[4] = utf8(event.deviceName);
+    fields[24] = std::to_string(event.flags);
+    fields[25] = std::to_string(event.buttonFlags);
+    fields[26] = std::to_string(event.buttonData);
+    fields[27] = std::to_string(event.deltaX);
+    fields[28] = std::to_string(event.deltaY);
+    fields[32] = std::to_string(event.extraInformation);
+    writeRow(output, fields);
+    output.flush();
+}
+
+void SessionWriter::writeRawKeyboard(const RawKeyboardEvent& event) {
+    if (!active()) return;
+    std::array<std::string, 33> fields{};
+    fields[0] = session;
+    fields[1] = description;
+    fields[2] = timestamp("%Y-%m-%d %H:%M:%S");
+    fields[3] = "RAW_KEYBOARD";
+    fields[4] = utf8(event.deviceName);
+    fields[22] = std::to_string(event.message);
+    fields[32] = std::to_string(event.extraInformation);
+    fields[29] = std::to_string(event.makeCode);
+    fields[30] = std::to_string(event.flags);
+    fields[31] = std::to_string(event.virtualKey);
+    writeRow(output, fields);
+    output.flush();
+}
+
+void SessionWriter::writeWindowInput(const std::string& event, WPARAM wParam, LPARAM lParam,
+                                     unsigned sourceDevice, unsigned sourceOrigin) {
+    if (!active()) return;
+    std::array<std::string, 33> fields{};
+    fields[0] = session;
+    fields[1] = description;
+    fields[2] = timestamp("%Y-%m-%d %H:%M:%S");
+    fields[3] = event;
+    fields[4] = "WINDOW_MESSAGE";
+    fields[20] = std::to_string(sourceDevice);
+    fields[21] = std::to_string(sourceOrigin);
+    fields[22] = std::to_string(static_cast<unsigned long long>(wParam));
+    fields[23] = std::to_string(static_cast<unsigned long long>(lParam));
+    writeRow(output, fields);
+    output.flush();
+}
+
+void SessionWriter::writeWindowState(const std::string& event, WPARAM wParam, LPARAM lParam) {
+    writeWindowInput(event, wParam, lParam, 0, 0);
 }
 
 void SessionWriter::stop() {

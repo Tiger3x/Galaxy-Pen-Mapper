@@ -8,15 +8,17 @@ It records only while all of these conditions are true:
 
 1. the user pressed **Iniciar captura**;
 2. the Galaxy Pen Event Monitor window is the foreground window;
-3. the pen is inside the bordered **ÁREA DE TESTE DA CANETA**.
+3. for pen events, the pen is inside the bordered **ÁREA DE TESTE DA CANETA**.
 
-Events outside the capture area are ignored. Raw Input no longer uses `RIDEV_INPUTSINK`, so the application does not intentionally request background HID input.
+P002.4 records mouse-button and keyboard channels while the session is active and the window is in the foreground, even if the pen pointer temporarily disappears from the test area. Raw Input does not use `RIDEV_INPUTSINK`, so the application does not intentionally request background input.
 
 ## What is observed
 
 Two input layers are kept for diagnosis:
 
 - **RAW_HID** — Digitizer reports from HID Usage Page `0x0D`, when exposed by Windows Raw Input;
+- **RAW_MOUSE / RAW_KEYBOARD** — foreground Raw Input used to identify actions synthesized by tablet drivers;
+- **WINDOW_MOUSE_* / WINDOW_KEY_* / WINDOW_APPCOMMAND** — interpreted window messages with the input-source metadata reported by Windows;
 - **WINDOWS_POINTER** — Windows-interpreted pen state via `WM_POINTER` and `GetPointerPenInfo`.
 
 The live panel shows:

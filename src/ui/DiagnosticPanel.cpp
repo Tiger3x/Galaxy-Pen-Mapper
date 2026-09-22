@@ -45,7 +45,7 @@ void DiagnosticPanel::draw(HDC dc, HWND window, const PenState& state, unsigned 
     HGDIOBJ previousFont = SelectObject(dc, titleFont);
     text(dc, 32, 24, L"Galaxy Pen Diagnostic Studio", RGB(246, 249, 255));
     SelectObject(dc, GetStockObject(DEFAULT_GUI_FONT));
-    text(dc, 32, 58, L"P002.3  •  Observação segura de Windows Pointer e Raw HID", RGB(152, 170, 198));
+    text(dc, 32, 58, L"P002.4  •  Caneta, Raw HID, mouse e teclado", RGB(152, 170, 198));
 
     const RECT area = captureArea(window);
     const COLORREF card = RGB(29, 38, 53);

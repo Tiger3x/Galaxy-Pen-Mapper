@@ -25,6 +25,28 @@ const char* pointerEventName(UINT message) {
     }
 }
 
+const char* windowInputEventName(UINT message) {
+    switch (message) {
+        case WM_LBUTTONDOWN: return "WINDOW_MOUSE_LEFT_DOWN";
+        case WM_LBUTTONUP: return "WINDOW_MOUSE_LEFT_UP";
+        case WM_RBUTTONDOWN: return "WINDOW_MOUSE_RIGHT_DOWN";
+        case WM_RBUTTONUP: return "WINDOW_MOUSE_RIGHT_UP";
+        case WM_MBUTTONDOWN: return "WINDOW_MOUSE_MIDDLE_DOWN";
+        case WM_MBUTTONUP: return "WINDOW_MOUSE_MIDDLE_UP";
+        case WM_XBUTTONDOWN: return "WINDOW_MOUSE_X_DOWN";
+        case WM_XBUTTONUP: return "WINDOW_MOUSE_X_UP";
+        case WM_MOUSEWHEEL: return "WINDOW_MOUSE_WHEEL";
+        case WM_MOUSEHWHEEL: return "WINDOW_MOUSE_HWHEEL";
+        case WM_KEYDOWN: return "WINDOW_KEY_DOWN";
+        case WM_KEYUP: return "WINDOW_KEY_UP";
+        case WM_SYSKEYDOWN: return "WINDOW_SYSKEY_DOWN";
+        case WM_SYSKEYUP: return "WINDOW_SYSKEY_UP";
+        case WM_APPCOMMAND: return "WINDOW_APPCOMMAND";
+        case WM_HOTKEY: return "WINDOW_HOTKEY";
+        default: return "WINDOW_INPUT";
+    }
+}
+
 } // namespace
 
 bool MainWindow::create(HINSTANCE instance, int showCommand) {
@@ -37,7 +59,7 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
 
     if (!RegisterClassW(&windowClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
 
-    HWND window = CreateWindowExW(0, className, L"Galaxy Pen Diagnostic Studio — P002.3",
+    HWND window = CreateWindowExW(0, className, L"Galaxy Pen Diagnostic Studio — P002.4",
                                   WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                                   CW_USEDEFAULT, CW_USEDEFAULT, 1000, 720, nullptr, nullptr, instance, this);
     if (!window) return false;
@@ -72,16 +94,24 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             }
             break;
         case WM_INPUT: {
-            const auto reports = rawHidCapture.process(reinterpret_cast<HRAWINPUT>(lParam));
-            if (!reports.empty()) {
-                latestRaw.assign(reports.back().bytes.begin(), reports.back().bytes.end());
-                if (canRecord(window)) {
-                    for (const auto& report : reports) {
+            const auto input = rawHidCapture.process(reinterpret_cast<HRAWINPUT>(lParam));
+            if (!input.hidReports.empty()) {
+                latestRaw.assign(input.hidReports.back().bytes.begin(), input.hidReports.back().bytes.end());
+                if (canRecordSystemInput(window)) {
+                    for (const auto& report : input.hidReports) {
                         sessionWriter.writeRaw(report);
                         ++eventCount;
                     }
                 }
                 scheduleRepaint();
+            }
+            if (canRecordSystemInput(window) && input.mouse && input.mouse->buttonFlags != 0) {
+                sessionWriter.writeRawMouse(*input.mouse);
+                ++eventCount;
+            }
+            if (canRecordSystemInput(window) && input.keyboard) {
+                sessionWriter.writeRawKeyboard(*input.keyboard);
+                ++eventCount;
             }
             return DefWindowProcW(window, message, wParam, lParam);
         }
@@ -98,7 +128,7 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             if (!penCapture.processPointer(message, wParam)) return DefWindowProcW(window, message, wParam, lParam);
             penInside = message != WM_POINTERLEAVE && panel.contains(window, penCapture.state().position);
             if (penInside) status = recording ? L"Gravando eventos da caneta dentro da área de teste." : L"Caneta detectada. Inicie uma captura para gravar.";
-            else status = recording ? L"Captura pausada: mova a caneta para a área de teste." : L"Caneta fora da área de teste.";
+            else status = recording ? L"Caneta fora da área; mouse e teclado continuam sendo observados." : L"Caneta fora da área de teste.";
             if (canRecord(window) || (message == WM_POINTERLEAVE && wasInside && recording && sessionWriter.active())) {
                 sessionWriter.writePointer(pointerEventName(message), penCapture.state());
                 ++eventCount;
@@ -106,7 +136,29 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             scheduleRepaint();
             return DefWindowProcW(window, message, wParam, lParam);
         }
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONUP:
+        case WM_RBUTTONDOWN:
+        case WM_RBUTTONUP:
+        case WM_MBUTTONDOWN:
+        case WM_MBUTTONUP:
+        case WM_XBUTTONDOWN:
+        case WM_XBUTTONUP:
+        case WM_MOUSEWHEEL:
+        case WM_MOUSEHWHEEL:
+        case WM_KEYDOWN:
+        case WM_KEYUP:
+        case WM_SYSKEYDOWN:
+        case WM_SYSKEYUP:
+        case WM_APPCOMMAND:
+        case WM_HOTKEY:
+            recordWindowInput(window, windowInputEventName(message), wParam, lParam);
+            break;
         case WM_ACTIVATE:
+            if (recording && sessionWriter.active()) {
+                sessionWriter.writeWindowState(LOWORD(wParam) == WA_INACTIVE ? "WINDOW_INACTIVE" : "WINDOW_ACTIVE", wParam, lParam);
+                ++eventCount;
+            }
             if (LOWORD(wParam) == WA_INACTIVE && recording) {
                 status = L"Captura pausada: a janela precisa ficar em primeiro plano.";
                 scheduleRepaint();
@@ -203,6 +255,16 @@ void MainWindow::scheduleRepaint() {
     repaintPending = true;
 }
 
+void MainWindow::recordWindowInput(HWND window, const std::string& event, WPARAM wParam, LPARAM lParam) {
+    if (!canRecordSystemInput(window)) return;
+    INPUT_MESSAGE_SOURCE source{};
+    GetCurrentInputMessageSource(&source);
+    sessionWriter.writeWindowInput(event, wParam, lParam,
+                                   static_cast<unsigned>(source.deviceType),
+                                   static_cast<unsigned>(source.originId));
+    ++eventCount;
+}
+
 std::wstring MainWindow::controlText(HWND control) const {
     const int length = GetWindowTextLengthW(control);
     std::vector<wchar_t> text(static_cast<size_t>(length) + 1, L'\0');
@@ -212,4 +274,8 @@ std::wstring MainWindow::controlText(HWND control) const {
 
 bool MainWindow::canRecord(HWND window) const {
     return recording && sessionWriter.active() && penInside && GetForegroundWindow() == window;
+}
+
+bool MainWindow::canRecordSystemInput(HWND window) const {
+    return recording && sessionWriter.active() && GetForegroundWindow() == window;
 }

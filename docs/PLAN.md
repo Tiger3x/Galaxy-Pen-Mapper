@@ -27,7 +27,7 @@ Record controlled, labeled sequences with:
 ### P004 — Input Classification 🟡
 Map report bits/usages to tip, barrel buttons, pressure, proximity and other states. Determine where the double-click/disable behavior originates.
 
-**Current result:** pressure saturation of the PW500 on the screen is present in Raw HID (`0x0FFF`), and HS611 report state `0xC4` produces contact/click with zero pressure. See [P004 classification](P004-INPUT-CLASSIFICATION.md).
+**Current result:** the PW500 screen path compresses pressure into the top of the scale and is predominantly saturated; both pen buttons recreate the Windows contact while Raw HID remains in contact. Without the Huion driver, HS611 state `0xC4` produces contact/click with zero pressure. With the driver, button states disappear from the Digitizer collection, so P002.4 now captures mouse, keyboard and synthesized window input to locate them. See [P004 classification](P004-INPUT-CLASSIFICATION.md).
 
 ### P005 — User-mode Remapper
 Prototype configurable remapping without a kernel driver whenever Windows exposes enough information.

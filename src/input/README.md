@@ -1,9 +1,6 @@
 # Input Layer
 
-P002.3 will move pen input handling here.
+Current diagnostic input modules:
 
-Planned modules:
-
-- PointerCapture.cpp
-- RawHidCapture.cpp
-- PenState.cpp
+- `PenCapture`: Windows `WM_POINTER` pen state;
+- `RawHidCapture`: Digitizer HID reports plus mouse and keyboard Raw Input used to trace driver-generated button actions.

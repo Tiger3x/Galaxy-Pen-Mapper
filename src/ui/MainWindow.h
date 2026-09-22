@@ -21,8 +21,10 @@ private:
     void stopCapture();
     void clearPanel();
     void scheduleRepaint();
+    void recordWindowInput(HWND window, const std::string& event, WPARAM wParam, LPARAM lParam);
     std::wstring controlText(HWND control) const;
     bool canRecord(HWND window) const;
+    bool canRecordSystemInput(HWND window) const;
 
     HWND sessionBox = nullptr;
     HWND descriptionBox = nullptr;
