@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(GalaxyPenMapper VERSION 0.2.2 LANGUAGES CXX)
+project(GalaxyPenMapper VERSION 0.2.3 LANGUAGES CXX)
 
 add_executable(GalaxyPenHidScanner
     src/main.cpp
@@ -8,6 +8,11 @@ add_executable(GalaxyPenHidScanner
 
 add_executable(GalaxyPenEventMonitor WIN32
     src/monitor.cpp
+    src/capture/SessionWriter.cpp
+    src/input/PenCapture.cpp
+    src/input/RawHidCapture.cpp
+    src/ui/DiagnosticPanel.cpp
+    src/ui/MainWindow.cpp
 )
 
 foreach(target GalaxyPenHidScanner GalaxyPenEventMonitor)

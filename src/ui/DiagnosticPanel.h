@@ -3,7 +3,13 @@
 #include <windows.h>
 #include "../input/PenCapture.h"
 
+#include <string>
+
 class DiagnosticPanel {
 public:
-    void draw(HDC dc, const PenState& state, unsigned long events);
+    RECT captureArea(HWND window) const;
+    bool contains(HWND window, POINT screenPoint) const;
+    void draw(HDC dc, HWND window, const PenState& state, unsigned long long events,
+              bool recording, bool penInside, const std::wstring& status,
+              const std::wstring& latestRaw) const;
 };
