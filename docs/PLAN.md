@@ -16,16 +16,18 @@ Capture Digitizer Raw Input reports plus Windows-interpreted pen events (`WM_POI
 
 **Exit criterion:** Windows build validated. Real-hardware CSV capture on the Galaxy Book is the next validation step before P003.
 
-### P003 — Comparative Capture
+### P003 — Comparative Capture ✅
 Record controlled, labeled sequences with:
 1. Samsung S Pen;
 2. Huion PW500 directly on the Galaxy display;
 3. PW500 through the Huion HS611.
 
-**Exit criterion:** produce comparable logs showing which fields differ.
+**Exit criterion:** achieved with four real-hardware captures: S Pen on screen, PW500 on screen, and PW500 through HS611 with and without the Huion driver.
 
-### P004 — Input Classification
+### P004 — Input Classification 🟡
 Map report bits/usages to tip, barrel buttons, pressure, proximity and other states. Determine where the double-click/disable behavior originates.
+
+**Current result:** pressure saturation of the PW500 on the screen is present in Raw HID (`0x0FFF`), and HS611 report state `0xC4` produces contact/click with zero pressure. See [P004 classification](P004-INPUT-CLASSIFICATION.md).
 
 ### P005 — User-mode Remapper
 Prototype configurable remapping without a kernel driver whenever Windows exposes enough information.
