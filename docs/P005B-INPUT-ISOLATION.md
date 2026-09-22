@@ -32,9 +32,9 @@ Windows HIDClass creates a separate device node for each top-level collection; t
 
 ## P007 research gate — no installation yet
 
-1. Confirm the live `COL04` report path and whether a collection-scoped filter can intercept report `0x1A` *before* Windows creates pen events. Determine whether `COL04` alone carries reliable pen identity; do not assume the `COL01` mode bytes are visible in that filter.
-2. Design a fail-open pass-through: unknown pen, mixed mode, startup, errors, or filter shutdown must leave the S Pen and original input unchanged. The 1-second P002.6 candidate delay cannot by itself deliver a corrected first stroke, so identification must be examined further before any implementation.
+1. Confirm the live `COL04` report path and whether a collection-scoped filter can intercept report `0x1A` *before* Windows creates pen events. Do not assume the `COL01` mode bytes are visible in that filter.
+2. Per the user's later decision, use a [manual tray-controlled PW500 mode](P007-MANUAL-MODE.md), not automatic pen identification. Design a fail-open pass-through: off, startup, errors, control-app exit and filter shutdown must leave the S Pen and original input unchanged. While on, any pen on the screen may be transformed.
 3. Specify an isolated test setup and recovery procedure before considering any driver binding on the user's only live machine. A driver in the input path can break pen input; it also needs appropriate signing on 64-bit Windows. [Microsoft driver signing](https://learn.microsoft.com/en-us/windows-hardware/drivers/develop/signing-a-driver).
-4. Decide with the user whether to pursue this higher-risk driver branch or an explicitly limited integration for one application. Neither path can reconstruct the pressure samples already saturated at 4095.
+4. Complete the driver feasibility gate before requesting deployment approval. Neither a driver nor an application integration can reconstruct the pressure samples already saturated at 4095.
 
 No driver is installed, replaced or disabled by this milestone. The diagnostic monitor remains observation-only.
