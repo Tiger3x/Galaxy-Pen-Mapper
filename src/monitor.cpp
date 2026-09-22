@@ -7,76 +7,13 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
-
-namespace fs = std::filesystem;
-
-constexpr int IDC_START=1001;
-constexpr int IDC_STOP=1002;
-constexpr int IDC_SESSION=1003;
-constexpr int IDC_DESC=1004;
-
-HWND sessionBox=nullptr;
-HWND descBox=nullptr;
-std::ofstream logFile;
-bool recording=false;
-unsigned long events=0;
-
-std::string stamp(){
- auto t=std::time(nullptr); std::tm tm{}; localtime_s(&tm,&t);
- std::ostringstream s; s<<std::put_time(&tm,"%Y%m%d-%H%M%S"); return s.str();
-}
-
-std::string narrow(const std::wstring& w){
- if(w.empty()) return "";
- int n=WideCharToMultiByte(CP_UTF8,0,w.data(),(int)w.size(),nullptr,0,nullptr,nullptr);
- std::string r(n,0); WideCharToMultiByte(CP_UTF8,0,w.data(),(int)w.size(),r.data(),n,nullptr,nullptr); return r;
-}
-
-std::string csv(const std::string& s){return "\""+s+"\"";}
-
-void startCapture(){
- wchar_t s[128]{},d[256]{};
- GetWindowTextW(sessionBox,s,128);
- GetWindowTextW(descBox,d,256);
- fs::create_directories("captures");
- logFile.open("captures/"+narrow(s)+"_"+stamp()+".csv");
- logFile<<"session,description,timestamp,event\n";
- logFile<<csv(narrow(s))<<","<<csv(narrow(d))<<","<<stamp()<<",START\n";
- recording=true;
- events=0;
-}
-
-void stopCapture(){
- if(logFile){logFile<<"STOP\n";logFile.close();}
- recording=false;
-}
-
-LRESULT CALLBACK wnd(HWND h,UINT m,WPARAM w,LPARAM l){
- switch(m){
- case WM_CREATE:
-  sessionBox=CreateWindowW(L"EDIT",L"S_Pen",WS_CHILD|WS_VISIBLE|WS_BORDER,20,20,220,25,h,(HMENU)IDC_SESSION,0,0);
-  descBox=CreateWindowW(L"EDIT",L"Teste da caneta",WS_CHILD|WS_VISIBLE|WS_BORDER,20,55,220,25,h,(HMENU)IDC_DESC,0,0);
-  CreateWindowW(L"BUTTON",L"Iniciar captura",WS_CHILD|WS_VISIBLE,260,20,130,30,h,(HMENU)IDC_START,0,0);
-  CreateWindowW(L"BUTTON",L"Parar",WS_CHILD|WS_VISIBLE,260,55,130,30,h,(HMENU)IDC_STOP,0,0);
-  return 0;
- case WM_COMMAND:
-  if(LOWORD(w)==IDC_START) startCapture();
-  if(LOWORD(w)==IDC_STOP) stopCapture();
-  return 0;
- case WM_PAINT:{
-  PAINTSTRUCT ps{}; HDC dc=BeginPaint(h,&ps);
-  Rectangle(dc,20,110,460,350);
-  TextOutW(dc,40,130,L"AREA DE TESTE DA CANETA",25);
-  TextOutW(dc,40,160,L"Sessao e descricao serao usadas no CSV",37);
-  EndPaint(h,&ps); return 0;}
- case WM_DESTROY:
-  stopCapture(); PostQuitMessage(0); return 0;
- }
- return DefWindowProcW(h,m,w,l);
-}
-
-int WINAPI wWinMain(HINSTANCE i,HINSTANCE,LPWSTR,int){
- WNDCLASSW c{}; c.lpfnWndProc=wnd; c.hInstance=i; c.lpszClassName=L"GalaxyPenMapper"; RegisterClassW(&c);
- CreateWindowW(c.lpszClassName,L"Galaxy Pen Event Monitor P002.2",WS_OVERLAPPEDWINDOW|WS_VISIBLE,100,100,520,430,0,0,i,0);
- MSG msg{}; while(GetMessageW(&msg,0,0,0)){TranslateMessage(&msg);DispatchMessageW(&msg);} return 0;
-}
+namespace fs=std::filesystem;
+constexpr int START=1001,STOP=1002,SESSION=1003,DESC=1004;
+HWND sBox,dBox;std::ofstream file;bool rec=false;unsigned events=0;std::wstring live=L"Waiting";
+std::string n8(std::wstring w){int n=WideCharToMultiByte(CP_UTF8,0,w.data(),w.size(),0,0,0,0);std::string r(n,0);WideCharToMultiByte(CP_UTF8,0,w.data(),w.size(),r.data(),n,0,0);return r;}
+std::string ts(){auto t=time(0);tm m{};localtime_s(&m,&t);char b[40];strftime(b,40,"%Y%m%d-%H%M%S",&m);return b;}
+void log(char* e){if(!rec)return;file<<e<<","<<ts()<<"\n";events++;live=L"Events: "+std::to_wstring(events);}
+void start(){wchar_t a[128];GetWindowTextW(sBox,a,128);fs::create_directories("captures");file.open("captures/"+n8(a)+"_"+ts()+".csv");file<<"event,time\n";rec=1;events=0;live=L"Recording";}
+void stop(){if(file)file.close();rec=0;}
+LRESULT CALLBACK p(HWND h,UINT m,WPARAM w,LPARAM l){switch(m){case WM_CREATE:sBox=CreateWindowW(L"EDIT",L"S_Pen",WS_CHILD|WS_VISIBLE|WS_BORDER,20,20,200,25,h,(HMENU)SESSION,0,0);dBox=CreateWindowW(L"EDIT",L"Test",WS_CHILD|WS_VISIBLE|WS_BORDER,20,55,200,25,h,(HMENU)DESC,0,0);CreateWindowW(L"BUTTON",L"Start",WS_CHILD|WS_VISIBLE,250,20,100,30,h,(HMENU)START,0,0);CreateWindowW(L"BUTTON",L"Stop",WS_CHILD|WS_VISIBLE,250,55,100,30,h,(HMENU)STOP,0,0);return 0;case WM_COMMAND:if(LOWORD(w)==START)start();if(LOWORD(w)==STOP)stop();return 0;case WM_POINTERDOWN:log("DOWN");InvalidateRect(h,0,1);return 0;case WM_POINTERUP:log("UP");InvalidateRect(h,0,1);return 0;case WM_POINTERUPDATE:log("UPDATE");InvalidateRect(h,0,1);return 0;case WM_PAINT:{PAINTSTRUCT ps;HDC d=BeginPaint(h,&ps);TextOutW(d,20,110,live.c_str(),live.size());Rectangle(d,20,150,450,350);TextOutW(d,40,170,L"AREA DE TESTE DA CANETA",25);EndPaint(h,&ps);return 0;}case WM_DESTROY:stop();PostQuitMessage(0);return 0;}return DefWindowProcW(h,m,w,l);}
+int WINAPI wWinMain(HINSTANCE i,HINSTANCE,LPWSTR,int){WNDCLASSW c{};c.lpfnWndProc=p;c.hInstance=i;c.lpszClassName=L"GPM";RegisterClassW(&c);CreateWindowW(L"GPM",L"Galaxy Pen Event Monitor P002.2",WS_OVERLAPPEDWINDOW|WS_VISIBLE,100,100,500,450,0,0,i,0);MSG m{};while(GetMessageW(&m,0,0,0)){TranslateMessage(&m);DispatchMessageW(&m);}return 0;}
