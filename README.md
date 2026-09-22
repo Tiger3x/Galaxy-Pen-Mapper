@@ -42,6 +42,7 @@ From an x64 Visual Studio developer command prompt with CMake and Ninja availabl
 ```text
 cmake -S . -B build-ninja -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build-ninja
+ctest --test-dir build-ninja --output-on-failure
 ```
 
 Executables:
