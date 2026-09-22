@@ -74,7 +74,27 @@ O estado `0xC4` é especialmente importante: foram observados cinco `POINTER_DOW
 
 Os bytes 6–7 mantêm pressão variável, com razão Raw/Windows mediana `8,009`. No teste direcionado a pressão Windows percorreu `0`–`919`, sem saturação em `1024`.
 
-Nos testes isolados de botão em hover, o relatório permaneceu `0x05/0x02`, `penFlags` permaneceu zero e não houve `POINTER_DOWN`. Nos testes com ponta + botão, o relatório permaneceu limitado a `0x02`/`0x03`; todas as transições de contato Windows coincidiram com transições Raw hover/contato. Portanto, os botões não estão expostos pela coleção Digitizer `0x05`. O driver deve encaminhá-los por mouse, teclado, comando de aplicativo ou outro dispositivo virtual.
+Nos testes isolados de botão em hover, o relatório permaneceu `0x05/0x02`, `penFlags` permaneceu zero e não houve `POINTER_DOWN`. Nos testes com ponta + botão, o relatório permaneceu limitado a `0x02`/`0x03`; todas as transições de contato Windows coincidiram com transições Raw hover/contato. Portanto, os botões não estão expostos pela coleção Digitizer `0x05`.
+
+### P004B — destino dos botões configurados no driver
+
+O usuário configurou o botão 1 como tecla `E` e o botão 2 como clique direito. Quatro capturas com o monitor P002.4 confirmaram o caminho:
+
+- `pen-events-20260922-172716.csv`: botão 1 em hover;
+- `pen-events-20260922-172808.csv`: botão 2 em hover;
+- `pen-events-20260922-172922.csv`: ponta + botão 1;
+- `pen-events-20260922-173015.csv`: ponta + botão 2.
+
+| Teste | Eventos atribuídos ao botão | Origem reportada pelo Windows | Digitizer da HS611 |
+| --- | --- | --- | --- |
+| Botão 1 em hover | 30 acionamentos de `E` (30 down + 30 up; tecla virtual `69`) | teclado, `IMO_INJECTED` (`2`) | somente `0x05/0x02`, sem contato |
+| Botão 2 em hover | 27 cliques direitos (27 down + 27 up) | mouse, `IMO_INJECTED` (`2`) | somente `0x05/0x02`, sem contato |
+| Ponta + botão 1 | 20 acionamentos de `E` | teclado, `IMO_INJECTED` (`2`) | `0x05/0x02` e `0x05/0x03` |
+| Ponta + botão 2 | 36 cliques direitos | mouse, `IMO_INJECTED` (`2`) | `0x05/0x02` e `0x05/0x03` |
+
+Cada evento injetado aparece tanto no Raw Input quanto na mensagem da janela; são duas observações do mesmo acionamento, não dois acionamentos independentes. Os valores `IMDT_KEYBOARD=1`, `IMDT_MOUSE=2` e `IMO_INJECTED=2` foram conferidos no SDK do Windows instalado. O monitor não encontra um `hDevice` físico nos eventos Raw Keyboard/Mouse sintetizados; por isso o campo `device` fica vazio. A configuração fornecida pelo usuário é necessária para atribuir `E` ao botão 1 e clique direito ao botão 2.
+
+Nos dois testes com ponta, houve 42 ciclos `0x02→0x03→0x02` no relatório bruto e 42 pares `POINTER_DOWN`/`POINTER_UP`, acompanhados de 42 pares de clique esquerdo com origem `IMDT_PEN=8`, `IMO_HARDWARE=1`. Essas transições são anteriores à tradução dos botões em tecla ou clique direito. Os arquivos, por si, não mostram se o contato foi levantado fisicamente ou se oscilou perto do limiar enquanto a ponta era mantida apoiada; a pressão chegou a valores brutos tão baixos quanto `1`. Isso deve ser verificado separadamente antes de atribuir os cliques esquerdos extras ao driver ou aos botões.
 
 ## Estado da P004
 
@@ -87,15 +107,16 @@ Confirmado:
 - ponta e botão lateral principal da HS611 sem driver;
 - segundo botão da HS611 sem driver gerando contato com pressão zero;
 - transformação do protocolo Raw HID pelo driver Huion;
-- ausência dos dois botões na coleção Digitizer exposta pelo driver Huion.
+- ausência dos dois botões na coleção Digitizer exposta pelo driver Huion;
+- encaminhamento do botão 1 para `E` e do botão 2 para clique direito pelo driver, ambos como entrada injetada.
 
-Ainda precisa de captura direcionada:
+Pontos separados da classificação principal:
 
-- verificar se o driver Huion envia os botões por mouse, teclado, comando de aplicativo ou dispositivo virtual;
-- distinguir quais bytes restantes representam tilt e distância/proximidade.
+- distinguir os bytes restantes de tilt e distância/proximidade, se um recurso futuro precisar deles;
+- isolar a causa dos ciclos de contato bruto observados nos testes de ponta + botão com uma captura de contato contínuo sem pressionar botões.
 
 ## Implicação para a P005
 
 Um remapeador em modo usuário pode detectar e amortecer as recriações indevidas de contato quando correlacionar `WM_POINTER` com o Raw HID contínuo. Ele não pode reconstruir o curso real da PW500 diretamente na tela: a maior parte do sinal já chega comprimida ou saturada. Para esse caminho, as opções são inverter e reescalar a faixa residual com qualidade limitada, usar pressão simulada ou aceitar pressão quase binária.
 
-Para a HS611 com driver, o próximo monitor registra Raw Mouse, Raw Keyboard, mensagens de mouse/teclado e a origem declarada pelo Windows. Essa captura determinará qual canal deve alimentar o remapeador P005.
+Na HS611 com driver, a P005 pode identificar as saídas configuradas dos botões pelo teclado ou mouse injetado. Mapear ambos para teclas pouco usadas e distintas, se o driver permitir, facilitaria distinguir os dois botões de atalhos comuns. A configuração atual já foi suficiente para determinar o caminho de cada botão.

@@ -9,7 +9,7 @@ The first hardware target is the **Huion PW500** (from the HS611) used directly 
 - **P001 — HID Scanner: implemented and build-validated**
 - **P002 — Pen Event Monitor: implemented and build-validated**
 - **P003 — Comparative Capture: completed with four hardware paths**
-- **P004 — Input Classification: Digitizer paths classified; driver-generated button channel under test**
+- **P004 — Input Classification: button paths mapped; contact cycling under investigation**
 
 ### P001 — GalaxyPenHidScanner.exe
 
