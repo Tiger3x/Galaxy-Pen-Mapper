@@ -463,7 +463,7 @@ void CreateControls(HWND hwnd) {
         150,
         36,
         hwnd,
-        reinterpret_cast<HMENU>(IDC_START_CAPTURE),
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_START_CAPTURE)),
         GetModuleHandleW(nullptr),
         nullptr);
 
@@ -477,7 +477,7 @@ void CreateControls(HWND hwnd) {
         110,
         36,
         hwnd,
-        reinterpret_cast<HMENU>(IDC_STOP_CAPTURE),
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_STOP_CAPTURE)),
         GetModuleHandleW(nullptr),
         nullptr);
 
@@ -491,7 +491,7 @@ void CreateControls(HWND hwnd) {
         130,
         36,
         hwnd,
-        reinterpret_cast<HMENU>(IDC_CLEAR_STATUS),
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_CLEAR_STATUS)),
         GetModuleHandleW(nullptr),
         nullptr);
 
@@ -599,19 +599,23 @@ LRESULT CALLBACK WindowProc(
             SetBkMode(dc, TRANSPARENT);
             SelectObject(dc, GetStockObject(DEFAULT_GUI_FONT));
 
+            const wchar_t* title =
+                L"Galaxy Pen Event Monitor — P002.1";
             TextOutW(
                 dc,
                 32,
                 24,
-                L"Galaxy Pen Event Monitor — P002.1",
-                34);
+                title,
+                lstrlenW(title));
 
+            const wchar_t* subtitle =
+                L"Somente a área de teste abaixo é registrada.";
             TextOutW(
                 dc,
                 32,
                 52,
-                L"Somente a área de teste abaixo é registrada.",
-                44);
+                subtitle,
+                lstrlenW(subtitle));
 
             const RECT area = CaptureRect(hwnd);
 
@@ -631,12 +635,14 @@ LRESULT CALLBACK WindowProc(
             SelectObject(dc, oldPen);
             DeleteObject(border);
 
+            const wchar_t* areaTitle =
+                L"ÁREA DE TESTE DA CANETA";
             TextOutW(
                 dc,
                 area.left + 16,
                 area.top + 14,
-                L"ÁREA DE TESTE DA CANETA",
-                23);
+                areaTitle,
+                lstrlenW(areaTitle));
 
             DrawLabelValue(
                 dc,
