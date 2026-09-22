@@ -24,7 +24,7 @@ Enumerate Windows HID interfaces and identify Digitizer-class devices, VID/PID, 
 ### P002 — Pen Event Monitor ✅
 Capture Digitizer Raw Input reports plus Windows-interpreted pen events (`WM_POINTER` / `GetPointerPenInfo`) with timestamps.
 
-**Exit criterion:** Windows build and real-hardware CSV captures validated on the Galaxy Book. The P002.4 monitor also records keyboard/mouse channels and Windows input-source metadata.
+**Exit criterion:** Windows build and real-hardware CSV captures validated on the Galaxy Book. The P002.5 monitor records keyboard/mouse channels and Windows input-source metadata, and separates Digitizer Raw HID observation from foreground state.
 
 ### P003 — Comparative Capture ✅
 Record controlled, labeled sequences with:
@@ -43,6 +43,8 @@ Map report bits/usages to tip, barrel buttons, pressure, proximity and other sta
 
 ### P005 — User-mode Feasibility Gate
 Keep direct use on the Galaxy display as the first question: verify whether a user-mode program can distinguish the PW500 from the S Pen reliably and prevent or replace the original erroneous pen events in a target application. Raw Input observation alone is not suppression. Do not promise pressure correction or button remapping in other applications until this gate passes. The current WCOM reports do not distinguish the two side buttons.
+
+**Immediate verification milestone:** run the two [P005 screen-button captures](P005-SCREEN-BUTTON-TEST.md) with P002.5. For each button, determine whether apparent WCOM gaps occur with `window_foreground=1` throughout, whether Raw reports continue with a changed payload, and whether any observed report distinguishes button 1 from button 2. Classify gaps as capture-focus artifact, digitizer-report interruption, or inconclusive; do not infer an EMR-level mechanism from a missing Raw report. This milestone is complete only after both CSVs are reviewed and the findings are recorded. Then decide whether a user-mode identification/suppression experiment is justified; if not, document the limit before investing in remapping.
 
 The HS611 with driver is an independent, opt-in remapper branch. The Huion driver already assigns each button; build additional remapping only if the user wants behavior the driver cannot supply. In that case, use uniquely identifiable assignments where available, preserve physical keyboard/mouse use, prevent duplicate actions, and provide an immediate off switch.
 

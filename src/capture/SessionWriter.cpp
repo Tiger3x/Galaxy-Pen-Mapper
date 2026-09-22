@@ -41,7 +41,18 @@ std::string timestamp(const char* format) {
     return result.str();
 }
 
-void writeRow(std::ostream& output, const std::array<std::string, 33>& fields) {
+using CsvRow = std::array<std::string, 35>;
+
+CsvRow makeRow(const std::string& session, const std::string& description, const std::string& event) {
+    CsvRow fields{};
+    fields[0] = session;
+    fields[1] = description;
+    fields[2] = timestamp("%Y-%m-%d %H:%M:%S");
+    fields[3] = event;
+    return fields;
+}
+
+void writeRow(std::ostream& output, const CsvRow& fields) {
     for (size_t index = 0; index < fields.size(); ++index) {
         if (index != 0) output << ',';
         output << csv(fields[index]);
@@ -65,38 +76,48 @@ bool SessionWriter::start(const std::wstring& name, const std::wstring& details)
     output.open(outputPath, std::ios::out | std::ios::trunc);
     if (!output) return false;
 
-    output << "session,description,timestamp,event,device,vid,pid,usage_page,usage,report_index,raw_hex,pointer_id,pointer_flags,pen_flags,pressure,tilt_x,tilt_y,rotation,x,y,input_source_device,input_source_origin,message_wparam,message_lparam,mouse_flags,mouse_button_flags,mouse_button_data,mouse_dx,mouse_dy,key_make_code,key_flags,key_vkey,raw_extra_information\n";
-    output << csv(session) << ',' << csv(description) << ',' << csv(timestamp("%Y-%m-%d %H:%M:%S")) << ",SESSION_START,,,,,,,,,,,,,,,,,\n";
+    output << "session,description,timestamp,event,device,vid,pid,usage_page,usage,report_index,raw_hex,pointer_id,pointer_flags,pen_flags,pressure,tilt_x,tilt_y,rotation,x,y,input_source_device,input_source_origin,message_wparam,message_lparam,mouse_flags,mouse_button_flags,mouse_button_data,mouse_dx,mouse_dy,key_make_code,key_flags,key_vkey,raw_extra_information,window_foreground,raw_input_code\n";
+    writeRow(output, makeRow(session, description, "SESSION_START"));
     output.flush();
     return true;
 }
 
 void SessionWriter::writePointer(const std::string& event, const PenState& state) {
     if (!active()) return;
-    output << csv(session) << ',' << csv(description) << ',' << csv(timestamp("%Y-%m-%d %H:%M:%S")) << ',' << event
-           << ",WINDOWS_POINTER,,,,,,,"
-           << state.pointerId << ',' << csv(std::to_string(state.pointerFlags)) << ',' << csv(std::to_string(state.penFlags)) << ','
-           << state.pressure << ',' << state.tiltX << ',' << state.tiltY << ',' << state.rotation << ','
-           << state.position.x << ',' << state.position.y << '\n';
+    CsvRow fields = makeRow(session, description, event);
+    fields[4] = "WINDOWS_POINTER";
+    fields[11] = std::to_string(state.pointerId);
+    fields[12] = std::to_string(state.pointerFlags);
+    fields[13] = std::to_string(state.penFlags);
+    fields[14] = std::to_string(state.pressure);
+    fields[15] = std::to_string(state.tiltX);
+    fields[16] = std::to_string(state.tiltY);
+    fields[17] = std::to_string(state.rotation);
+    fields[18] = std::to_string(state.position.x);
+    fields[19] = std::to_string(state.position.y);
+    writeRow(output, fields);
     output.flush();
 }
 
-void SessionWriter::writeRaw(const RawHidReport& report) {
+void SessionWriter::writeRaw(const RawHidReport& report, bool windowForeground, unsigned rawInputCode) {
     if (!active()) return;
-    output << csv(session) << ',' << csv(description) << ',' << csv(timestamp("%Y-%m-%d %H:%M:%S")) << ",RAW_HID,"
-           << csv(utf8(report.deviceName)) << ',' << report.vendorId << ',' << report.productId << ','
-           << report.usagePage << ',' << report.usage << ',' << report.reportIndex << ',' << csv(report.bytes)
-           << ",,,,,,,,,,\n";
+    CsvRow fields = makeRow(session, description, "RAW_HID");
+    fields[4] = utf8(report.deviceName);
+    fields[5] = std::to_string(report.vendorId);
+    fields[6] = std::to_string(report.productId);
+    fields[7] = std::to_string(report.usagePage);
+    fields[8] = std::to_string(report.usage);
+    fields[9] = std::to_string(report.reportIndex);
+    fields[10] = report.bytes;
+    fields[33] = windowForeground ? "1" : "0";
+    fields[34] = std::to_string(rawInputCode);
+    writeRow(output, fields);
     output.flush();
 }
 
-void SessionWriter::writeRawMouse(const RawMouseEvent& event) {
+void SessionWriter::writeRawMouse(const RawMouseEvent& event, bool windowForeground, unsigned rawInputCode) {
     if (!active()) return;
-    std::array<std::string, 33> fields{};
-    fields[0] = session;
-    fields[1] = description;
-    fields[2] = timestamp("%Y-%m-%d %H:%M:%S");
-    fields[3] = "RAW_MOUSE";
+    CsvRow fields = makeRow(session, description, "RAW_MOUSE");
     fields[4] = utf8(event.deviceName);
     fields[24] = std::to_string(event.flags);
     fields[25] = std::to_string(event.buttonFlags);
@@ -104,23 +125,31 @@ void SessionWriter::writeRawMouse(const RawMouseEvent& event) {
     fields[27] = std::to_string(event.deltaX);
     fields[28] = std::to_string(event.deltaY);
     fields[32] = std::to_string(event.extraInformation);
+    fields[33] = windowForeground ? "1" : "0";
+    fields[34] = std::to_string(rawInputCode);
     writeRow(output, fields);
     output.flush();
 }
 
-void SessionWriter::writeRawKeyboard(const RawKeyboardEvent& event) {
+void SessionWriter::writeRawKeyboard(const RawKeyboardEvent& event, bool windowForeground, unsigned rawInputCode) {
     if (!active()) return;
-    std::array<std::string, 33> fields{};
-    fields[0] = session;
-    fields[1] = description;
-    fields[2] = timestamp("%Y-%m-%d %H:%M:%S");
-    fields[3] = "RAW_KEYBOARD";
+    CsvRow fields = makeRow(session, description, "RAW_KEYBOARD");
     fields[4] = utf8(event.deviceName);
     fields[22] = std::to_string(event.message);
     fields[32] = std::to_string(event.extraInformation);
     fields[29] = std::to_string(event.makeCode);
     fields[30] = std::to_string(event.flags);
     fields[31] = std::to_string(event.virtualKey);
+    fields[33] = windowForeground ? "1" : "0";
+    fields[34] = std::to_string(rawInputCode);
+    writeRow(output, fields);
+    output.flush();
+}
+
+void SessionWriter::writeForegroundSample(bool windowForeground) {
+    if (!active()) return;
+    CsvRow fields = makeRow(session, description, "FOREGROUND_SAMPLE");
+    fields[33] = windowForeground ? "1" : "0";
     writeRow(output, fields);
     output.flush();
 }
@@ -128,11 +157,7 @@ void SessionWriter::writeRawKeyboard(const RawKeyboardEvent& event) {
 void SessionWriter::writeWindowInput(const std::string& event, WPARAM wParam, LPARAM lParam,
                                      unsigned sourceDevice, unsigned sourceOrigin) {
     if (!active()) return;
-    std::array<std::string, 33> fields{};
-    fields[0] = session;
-    fields[1] = description;
-    fields[2] = timestamp("%Y-%m-%d %H:%M:%S");
-    fields[3] = event;
+    CsvRow fields = makeRow(session, description, event);
     fields[4] = "WINDOW_MESSAGE";
     fields[20] = std::to_string(sourceDevice);
     fields[21] = std::to_string(sourceOrigin);
@@ -148,7 +173,7 @@ void SessionWriter::writeWindowState(const std::string& event, WPARAM wParam, LP
 
 void SessionWriter::stop() {
     if (!active()) return;
-    output << csv(session) << ',' << csv(description) << ',' << csv(timestamp("%Y-%m-%d %H:%M:%S")) << ",SESSION_STOP,,,,,,,,,,,,,,,,,\n";
+    writeRow(output, makeRow(session, description, "SESSION_STOP"));
     output.flush();
     output.close();
 }

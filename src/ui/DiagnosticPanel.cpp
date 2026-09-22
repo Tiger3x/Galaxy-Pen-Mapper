@@ -45,7 +45,7 @@ void DiagnosticPanel::draw(HDC dc, HWND window, const PenState& state, unsigned 
     HGDIOBJ previousFont = SelectObject(dc, titleFont);
     text(dc, 32, 24, L"Galaxy Pen Diagnostic Studio", RGB(246, 249, 255));
     SelectObject(dc, GetStockObject(DEFAULT_GUI_FONT));
-    text(dc, 32, 58, L"P002.4  •  Caneta, Raw HID, mouse e teclado", RGB(152, 170, 198));
+    text(dc, 32, 58, L"P002.5  •  Caneta, Raw HID, foco, mouse e teclado", RGB(152, 170, 198));
 
     const RECT area = captureArea(window);
     const COLORREF card = RGB(29, 38, 53);
@@ -73,7 +73,7 @@ void DiagnosticPanel::draw(HDC dc, HWND window, const PenState& state, unsigned 
     DeleteObject(border);
 
     text(dc, area.left + 20, area.top + 18, L"ÁREA DE TESTE DA CANETA", RGB(226, 234, 247));
-    text(dc, area.left + 20, area.top + 46, L"Eventos só são gravados aqui, com esta janela ativa.", RGB(151, 171, 198));
+    text(dc, area.left + 20, area.top + 46, L"Ponteiro aqui; Raw HID durante a sessão, mesmo sem foco.", RGB(151, 171, 198));
     metric(dc, area.left + 20, area.top + 90, L"POINTER FLAGS", std::to_wstring(state.pointerFlags));
     metric(dc, area.left + 220, area.top + 90, L"PEN FLAGS", std::to_wstring(state.penFlags));
     metric(dc, area.left + 400, area.top + 90, L"POSIÇÃO", std::to_wstring(state.position.x) + L", " + std::to_wstring(state.position.y));

@@ -25,6 +25,7 @@ private:
     std::wstring controlText(HWND control) const;
     bool canRecord(HWND window) const;
     bool canRecordSystemInput(HWND window) const;
+    void recordForegroundSample(HWND window);
 
     HWND sessionBox = nullptr;
     HWND descriptionBox = nullptr;

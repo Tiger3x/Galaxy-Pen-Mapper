@@ -7,7 +7,7 @@ The first hardware target is the **Huion PW500** (from the HS611) used directly 
 ## Current status
 
 - **P001 — HID Scanner: implemented and build-validated**
-- **P002 — Pen Event Monitor: implemented and build-validated**
+- **P002 — Pen Event Monitor: implemented and build-validated (P002.5)**
 - **P003 — Comparative Capture: completed with four hardware paths**
 - **P004 — Input Classification: completed; HS611 button-time tip interruption recorded as established behavior**
 
@@ -15,7 +15,7 @@ The first hardware target is the **Huion PW500** (from the HS611) used directly 
 
 Enumerates HID interfaces and reports VID/PID, Usage Page/Usage, report sizes and Digitizer candidates.
 
-### P002.4 — GalaxyPenEventMonitor.exe
+### P002.5 — GalaxyPenEventMonitor.exe
 
 Native window-only test bench. Captures:
 
@@ -24,7 +24,8 @@ Native window-only test bench. Captures:
 - Raw Mouse, Raw Keyboard and synthesized window input, including Windows input-source metadata;
 - pressure, tilt, buttons/pen flags, coordinates and timestamps;
 - CSV logs for later S Pen vs PW500 comparison;
-- interpreted pen events inside the bordered test area; Raw HID, mouse and keyboard events while capture is enabled and the window is active.
+- interpreted pen events inside the bordered test area; Raw Mouse and Raw Keyboard button/key events only while the monitor is in the foreground;
+- Digitizer Raw HID reports throughout a recording session, even if the monitor loses focus, plus a foreground sample about every 50 ms. The CSV records `window_foreground` and `raw_input_code` for Raw Input rows, with millisecond timestamps.
 
 > A passive EMR pen normally does not enumerate as a separate USB/HID device on the display. The digitizer is the HID device; P002 observes how that digitizer reports each pen. The current captures show that the PW500's true pressure range cannot be recovered from the Galaxy display reports.
 
@@ -56,3 +57,4 @@ build-ninja\GalaxyPenEventMonitor.exe
 - [P001 — HID Scanner](docs/P001-HID-SCANNER.md)
 - [P002 — Pen Event Monitor](docs/P002-PEN-EVENT-MONITOR.md)
 - [P004 — Input Classification](docs/P004-INPUT-CLASSIFICATION.md)
+- [P005 — PW500 screen-button verification](docs/P005-SCREEN-BUTTON-TEST.md)

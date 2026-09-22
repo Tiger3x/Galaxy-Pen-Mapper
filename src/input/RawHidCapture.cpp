@@ -34,7 +34,7 @@ std::string hexBytes(const BYTE* data, size_t size) {
 
 bool RawHidCapture::initialize(HWND window) {
     RAWINPUTDEVICE devices[] = {
-        {0x0D, 0x00, RIDEV_PAGEONLY | RIDEV_DEVNOTIFY, window}, // Digitizers
+        {0x0D, 0x00, RIDEV_PAGEONLY | RIDEV_INPUTSINK | RIDEV_DEVNOTIFY, window}, // Digitizers, including focus loss
         {0x01, 0x02, RIDEV_DEVNOTIFY, window},                 // Mouse
         {0x01, 0x06, RIDEV_DEVNOTIFY, window},                 // Keyboard
     };

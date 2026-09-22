@@ -9,6 +9,8 @@ constexpr int kStopCapture = 1002;
 constexpr int kClearPanel = 1003;
 constexpr UINT_PTR kRefreshTimer = 1;
 constexpr UINT kRefreshIntervalMs = 16;
+constexpr UINT_PTR kForegroundTimer = 2;
+constexpr UINT kForegroundIntervalMs = 50;
 
 void setDefaultFont(HWND control) {
     SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
@@ -59,7 +61,7 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
 
     if (!RegisterClassW(&windowClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
 
-    HWND window = CreateWindowExW(0, className, L"Galaxy Pen Diagnostic Studio — P002.4",
+    HWND window = CreateWindowExW(0, className, L"Galaxy Pen Diagnostic Studio — P002.5",
                                   WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                                   CW_USEDEFAULT, CW_USEDEFAULT, 1000, 720, nullptr, nullptr, instance, this);
     if (!window) return false;
@@ -84,6 +86,7 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             penCapture.initialize(window);
             if (!rawHidCapture.initialize(window)) status = L"Raw HID não pôde ser registrado; WM_POINTER continua disponível.";
             SetTimer(window, kRefreshTimer, kRefreshIntervalMs, nullptr);
+            SetTimer(window, kForegroundTimer, kForegroundIntervalMs, nullptr);
             return 0;
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
@@ -94,23 +97,25 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             }
             break;
         case WM_INPUT: {
+            const bool windowForeground = GetForegroundWindow() == window;
+            const unsigned rawInputCode = GET_RAWINPUT_CODE_WPARAM(wParam);
             const auto input = rawHidCapture.process(reinterpret_cast<HRAWINPUT>(lParam));
             if (!input.hidReports.empty()) {
                 latestRaw.assign(input.hidReports.back().bytes.begin(), input.hidReports.back().bytes.end());
-                if (canRecordSystemInput(window)) {
+                if (recording && sessionWriter.active()) {
                     for (const auto& report : input.hidReports) {
-                        sessionWriter.writeRaw(report);
+                        sessionWriter.writeRaw(report, windowForeground, rawInputCode);
                         ++eventCount;
                     }
                 }
                 scheduleRepaint();
             }
-            if (canRecordSystemInput(window) && input.mouse && input.mouse->buttonFlags != 0) {
-                sessionWriter.writeRawMouse(*input.mouse);
+            if (recording && sessionWriter.active() && windowForeground && input.mouse && input.mouse->buttonFlags != 0) {
+                sessionWriter.writeRawMouse(*input.mouse, windowForeground, rawInputCode);
                 ++eventCount;
             }
-            if (canRecordSystemInput(window) && input.keyboard) {
-                sessionWriter.writeRawKeyboard(*input.keyboard);
+            if (recording && sessionWriter.active() && windowForeground && input.keyboard) {
+                sessionWriter.writeRawKeyboard(*input.keyboard, windowForeground, rawInputCode);
                 ++eventCount;
             }
             return DefWindowProcW(window, message, wParam, lParam);
@@ -165,6 +170,10 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             }
             return 0;
         case WM_TIMER:
+            if (wParam == kForegroundTimer) {
+                recordForegroundSample(window);
+                return 0;
+            }
             if (wParam == kRefreshTimer && repaintPending) {
                 repaintPending = false;
                 InvalidateRect(window, nullptr, FALSE);
@@ -206,6 +215,7 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             return 0;
         case WM_DESTROY:
             KillTimer(window, kRefreshTimer);
+            KillTimer(window, kForegroundTimer);
             sessionWriter.stop();
             PostQuitMessage(0);
             return 0;
@@ -232,6 +242,7 @@ void MainWindow::startCapture(HWND window) {
         eventCount = 0;
         status = L"Gravando. O CSV será salvo na pasta captures.";
         SetFocus(window);
+        recordForegroundSample(window);
     } else status = L"Não foi possível criar o CSV de captura.";
     scheduleRepaint();
 }
@@ -278,4 +289,9 @@ bool MainWindow::canRecord(HWND window) const {
 
 bool MainWindow::canRecordSystemInput(HWND window) const {
     return recording && sessionWriter.active() && GetForegroundWindow() == window;
+}
+
+void MainWindow::recordForegroundSample(HWND window) {
+    if (!recording || !sessionWriter.active()) return;
+    sessionWriter.writeForegroundSample(GetForegroundWindow() == window);
 }

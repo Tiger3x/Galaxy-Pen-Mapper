@@ -11,9 +11,10 @@ class SessionWriter {
 public:
     bool start(const std::wstring& name, const std::wstring& description);
     void writePointer(const std::string& event, const PenState& state);
-    void writeRaw(const RawHidReport& report);
-    void writeRawMouse(const RawMouseEvent& event);
-    void writeRawKeyboard(const RawKeyboardEvent& event);
+    void writeRaw(const RawHidReport& report, bool windowForeground, unsigned rawInputCode);
+    void writeRawMouse(const RawMouseEvent& event, bool windowForeground, unsigned rawInputCode);
+    void writeRawKeyboard(const RawKeyboardEvent& event, bool windowForeground, unsigned rawInputCode);
+    void writeForegroundSample(bool windowForeground);
     void writeWindowInput(const std::string& event, WPARAM wParam, LPARAM lParam,
                           unsigned sourceDevice, unsigned sourceOrigin);
     void writeWindowState(const std::string& event, WPARAM wParam, LPARAM lParam);
