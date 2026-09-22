@@ -100,7 +100,11 @@ Nos dois testes com ponta, houve 42 ciclos `0x02→0x03→0x02` no relatório br
 
 Em `pen-events-20260922-174526.csv`, identificado como `P004C_HS611_DRIVER_TIP_STEADY`, a primeira fase da ponta gerou um único contato Raw `0x05/0x03` de `17:45:29.433` a `17:45:57.575` (28,14 s; 6.516 relatórios) e um par `POINTER_DOWN`/`POINTER_UP`. No trecho central de 24 s, todos os 5.558 relatórios da HS611 permaneceram em contato; a pressão bruta teve mediana de `2768` e variou de `1116` a `3205`. Portanto, os ciclos repetidos dos testes anteriores **não são uma oscilação espontânea inevitável** durante um contato estável sem botões.
 
-Após essa fase, o arquivo registra mais 14 contatos Raw, de cerca de `0,10` a `1,12` s cada, além de três acionamentos de `E` e seis cliques direitos injetados pelo driver. Os acionamentos dos botões ocorrem próximos de várias transições Raw entre `0x03` e `0x02`; algumas passagens a hover são abruptas, enquanto outras mostram queda gradual da pressão. Também há intervalos sem botão registrado e uma pausa de cerca de 5,6 s entre o fim do primeiro contato e o primeiro `E`. Sem uma marcação física independente de quando a ponta saiu da mesa, a captura demonstra a correlação temporal, mas não prova se cada interrupção foi causada pelo botão, pelo driver ou por levantamento/reacomodação da caneta.
+Após essa fase, o arquivo registra mais 14 contatos Raw, de cerca de `0,10` a `1,12` s cada, além de três acionamentos de `E` e seis cliques direitos injetados pelo driver. O usuário confirmou que **levantou intencionalmente a caneta** após o contato longo e voltou a apoiá-la antes de usar os botões. Portanto, a pausa inicial não é uma falha. Confirmou também que, durante os acionamentos dos dois botões, **manteve a ponta fisicamente encostada na mesa**.
+
+Na fase do botão 1, as três liberações de `E` ocorreram a `5`, `2` e `2` ms das respectivas transições Raw `0x03→0x02`. As seis transições Raw mais próximas dos cliques direitos ocorreram de `37` a `35` ms antes ou de `1` a `153` ms depois do início desses cliques. Em três delas, a pressão bruta imediatamente antes da perda de contato ainda era `1847`–`2502`, em vez de diminuir gradualmente até zero. Logo, a perda de contato durante os acionamentos não é apenas uma recriação de `WM_POINTER`: ela já aparece na coleção Digitizer `0x05` exposta pela HS611 com driver, apesar da ponta apoiada. Os dois contatos curtos anteriores ao primeiro `E` não devem ser classificados como falha dos botões.
+
+O usuário propôs que o driver suprima propositalmente a ponta para dar prioridade à ação do botão. O sincronismo e algumas quedas abruptas são **compatíveis com essa hipótese**, mas o monitor observa a coleção já exposta pelo driver, não o sinal anterior a ele. Portanto, ainda não é possível demonstrar a intenção do driver nem separar definitivamente essa hipótese de uma mudança de força causada pelo acionamento, da caneta ou do hardware da mesa.
 
 ## Estado da P004
 
@@ -115,12 +119,13 @@ Confirmado:
 - transformação do protocolo Raw HID pelo driver Huion;
 - ausência dos dois botões na coleção Digitizer exposta pelo driver Huion;
 - encaminhamento do botão 1 para `E` e do botão 2 para clique direito pelo driver, ambos como entrada injetada;
-- estabilidade de um contato de 28,14 s sem botões na HS611 com driver; os ciclos curtos posteriores estão associados temporalmente à fase de botões, mas sua causa física exata ainda não foi isolada.
+- estabilidade de um contato de 28,14 s sem botões na HS611 com driver;
+- interrupções no próprio relatório Raw `0x05` durante a fase de botões, apesar de a ponta permanecer fisicamente apoiada, conforme confirmação do usuário.
 
 Pontos separados da classificação principal:
 
 - distinguir os bytes restantes de tilt e distância/proximidade, se um recurso futuro precisar deles;
-- confirmar se a ponta permaneceu fisicamente encostada durante os acionamentos da fase P004C e, se necessário, marcar pressões e levantamentos para distinguir o driver de mudanças no contato físico.
+- separar, se necessário para uma correção futura, a contribuição da caneta, da mesa, da força aplicada ao botão e do driver Huion. A classificação dos canais de entrada e o controle de contato estável da P004 estão concluídos.
 
 ## Implicação para a P005
 
