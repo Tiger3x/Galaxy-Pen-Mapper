@@ -24,11 +24,11 @@ PW500 contato: 02 2C ... FF 0F ...
 
 Os bytes 6–7 do relatório `0x02`, em little-endian, contêm a pressão bruta. Na primeira captura eles permaneceram em `0x0FFF` (`4095`) durante todo contato, exatamente como observado na tela: pressão Windows fixa em `1024`.
 
-O teste direcionado de pressão revelou uma nuance: houve alguma variação, mas apenas na faixa superior. Foram 10.747 amostras em contato, com pressão Windows entre `800` e `1024`; a mediana foi `1024` e 7.444 amostras (`69,3%`) ficaram totalmente saturadas. A pressão bruta variou de `3201` a `4095`. Portanto, a tela comprime quase todo o curso da PW500 nos 22% superiores da escala e satura a maior parte das amostras. Isso continua inadequado para desenho com pressão progressiva.
+O teste direcionado de pressão revelou uma nuance: houve alguma variação, mas apenas na faixa superior. Foram 10.747 amostras em contato, com pressão Windows entre `800` e `1024`; a mediana foi `1024` e 7.444 amostras (`69,3%`) ficaram totalmente saturadas. A pressão bruta variou de `3201` a `4095`. O usuário observou a direção dessa variação: o contato leve já começa em `1024` e só com força excessiva o valor **cai** para `800` e arredores. Portanto, além de comprimido e saturado, o trecho que ainda varia responde no sentido contrário ao esperado. Os CSVs confirmam a faixa de valores; a relação entre força aplicada e direção da mudança vem da observação durante o teste.
 
 Na S Pen, os mesmos bytes variam. Um exemplo medido foi pressão bruta `0x02BB` (`699`) convertida em pressão Windows `174`. A mediana da razão Raw/Windows foi `4,005`, confirmando a escala aproximada de 12 para 10 bits.
 
-Conclusão: a PW500 é detectada por ressonância na tela, mas o digitizador/firmware não decodifica corretamente seu curso de pressão. Uma correção sobre `WM_POINTER` pode reescalar a pequena faixa restante, mas não consegue reconstruir a maior parte do curso perdida pela compressão e saturação do relatório de entrada.
+Conclusão: a PW500 é detectada por ressonância na tela, mas o digitizador/firmware não decodifica corretamente seu curso de pressão. Uma correção sobre `WM_POINTER` poderia inverter e reescalar apenas a pequena faixa que ainda varia. A região fixa em `1024` já perdeu a informação de força e não pode ser reconstruída a partir desse relatório.
 
 ## Classificação dos relatórios
 
@@ -81,7 +81,7 @@ Nos testes isolados de botão em hover, o relatório permaneceu `0x05/0x02`, `pe
 Confirmado:
 
 - localização e escala da pressão nos três formatos observados;
-- compressão severa e saturação predominante da PW500 na tela antes de `WM_POINTER`;
+- compressão severa e saturação predominante da PW500 na tela antes de `WM_POINTER`; o usuário também observou que a pressão residual diminui quando a força aumenta;
 - classificação instável da PW500 na tela, frequentemente como invertida/borracha;
 - interrupção e recriação do contato Windows pelos dois botões da PW500 na tela, mesmo com contato Raw contínuo;
 - ponta e botão lateral principal da HS611 sem driver;
@@ -96,6 +96,6 @@ Ainda precisa de captura direcionada:
 
 ## Implicação para a P005
 
-Um remapeador em modo usuário pode detectar e amortecer as recriações indevidas de contato quando correlacionar `WM_POINTER` com o Raw HID contínuo. Ele não pode reconstruir o curso real da PW500 diretamente na tela: a maior parte do sinal já chega comprimida ou saturada. Para esse caminho, as opções são reescalar a faixa residual com qualidade limitada, usar pressão simulada ou aceitar pressão quase binária.
+Um remapeador em modo usuário pode detectar e amortecer as recriações indevidas de contato quando correlacionar `WM_POINTER` com o Raw HID contínuo. Ele não pode reconstruir o curso real da PW500 diretamente na tela: a maior parte do sinal já chega comprimida ou saturada. Para esse caminho, as opções são inverter e reescalar a faixa residual com qualidade limitada, usar pressão simulada ou aceitar pressão quase binária.
 
 Para a HS611 com driver, o próximo monitor registra Raw Mouse, Raw Keyboard, mensagens de mouse/teclado e a origem declarada pelo Windows. Essa captura determinará qual canal deve alimentar o remapeador P005.
