@@ -6,18 +6,18 @@ Understand the Galaxy Book3 360 pen input path first, then remap the Huion PW500
 
 ## Phases
 
-### P001 — HID Scanner
+### P001 — HID Scanner ✅
 Enumerate Windows HID interfaces and identify Digitizer-class devices, VID/PID, usages and report sizes.
 
-**Exit criterion:** we can identify the Galaxy digitizer-related HID interfaces from a scanner output.
+**Exit criterion:** scanner builds successfully and can identify Galaxy digitizer-related HID interfaces from a real-machine capture.
 
-### P002 — Pen Event Monitor
-Create a Win32 Raw Input monitor for live HID reports and decoded pen state where Windows exposes it.
+### P002 — Pen Event Monitor 🚧
+Capture Digitizer Raw Input reports plus Windows-interpreted pen events (`WM_POINTER` / `GetPointerPenInfo`) with timestamps.
 
-**Exit criterion:** capture timestamped reports for hover, tip, pressure and barrel-button actions.
+**Exit criterion:** build succeeds and the Galaxy Book produces a CSV containing pointer events and, where exposed, raw HID reports for hover/contact/buttons/pressure.
 
 ### P003 — Comparative Capture
-Record controlled sequences with:
+Record controlled, labeled sequences with:
 1. Samsung S Pen;
 2. Huion PW500 directly on the Galaxy display;
 3. PW500 through the Huion HS611.
