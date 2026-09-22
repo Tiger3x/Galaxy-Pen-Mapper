@@ -21,9 +21,11 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Upload scanner
+      - name: Upload Windows tools
         uses: actions/upload-artifact@v4
         with:
-          name: GalaxyPenHidScanner-windows-x64
-          path: build/Release/GalaxyPenHidScanner.exe
+          name: GalaxyPenMapper-windows-x64
+          path: |
+            build/Release/GalaxyPenHidScanner.exe
+            build/Release/GalaxyPenEventMonitor.exe
           if-no-files-found: error
