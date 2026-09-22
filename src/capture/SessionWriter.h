@@ -5,13 +5,15 @@
 
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 
 class SessionWriter {
 public:
     bool start(const std::wstring& name, const std::wstring& description);
     void writePointer(const std::string& event, const PenState& state);
-    void writeRaw(const RawHidReport& report, bool windowForeground, unsigned rawInputCode);
+    void writeRaw(const RawHidReport& report, bool windowForeground, unsigned rawInputCode,
+                  const std::string& signature, std::optional<unsigned> rawPressure);
     void writeRawMouse(const RawMouseEvent& event, bool windowForeground, unsigned rawInputCode);
     void writeRawKeyboard(const RawKeyboardEvent& event, bool windowForeground, unsigned rawInputCode);
     void writeForegroundSample(bool windowForeground);

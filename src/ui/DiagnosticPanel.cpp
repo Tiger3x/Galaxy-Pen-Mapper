@@ -31,7 +31,8 @@ bool DiagnosticPanel::contains(HWND window, POINT screenPoint) const {
 
 void DiagnosticPanel::draw(HDC dc, HWND window, const PenState& state, unsigned long long events,
                             bool recording, bool penInside, const std::wstring& status,
-                            const std::wstring& latestRaw) const {
+                            const std::wstring& latestRaw, PenSignature signature,
+                            std::optional<unsigned> rawPressure) const {
     RECT client{};
     GetClientRect(window, &client);
     HBRUSH page = CreateSolidBrush(RGB(18, 24, 35));
@@ -45,7 +46,7 @@ void DiagnosticPanel::draw(HDC dc, HWND window, const PenState& state, unsigned 
     HGDIOBJ previousFont = SelectObject(dc, titleFont);
     text(dc, 32, 24, L"Galaxy Pen Diagnostic Studio", RGB(246, 249, 255));
     SelectObject(dc, GetStockObject(DEFAULT_GUI_FONT));
-    text(dc, 32, 58, L"P002.5  •  Caneta, Raw HID, foco, mouse e teclado", RGB(152, 170, 198));
+    text(dc, 32, 58, L"P002.6  •  Padrão da caneta, pressão e Raw HID", RGB(152, 170, 198));
 
     const RECT area = captureArea(window);
     const COLORREF card = RGB(29, 38, 53);
@@ -56,9 +57,13 @@ void DiagnosticPanel::draw(HDC dc, HWND window, const PenState& state, unsigned 
 
     metric(dc, 52, 169, L"STATUS", recording ? L"GRAVANDO" : L"EM ESPERA");
     metric(dc, 210, 169, L"EVENTOS", std::to_wstring(events));
-    metric(dc, 350, 169, L"PRESSÃO", std::to_wstring(state.pressure));
+    metric(dc, 350, 169, L"PRESSÃO WIN / RAW",
+           std::to_wstring(state.pressure) + L" / " +
+           (rawPressure ? std::to_wstring(*rawPressure) : L"—"));
     metric(dc, 500, 169, L"TILT X / Y", std::to_wstring(state.tiltX) + L" / " + std::to_wstring(state.tiltY));
-    metric(dc, 690, 169, L"CANETA", penInside ? L"NA ÁREA" : L"FORA DA ÁREA");
+    const wchar_t* pattern = signature == PenSignature::SPenPattern ? L"S PEN" :
+                             signature == PenSignature::PW500Candidate ? L"PW500 PROVÁVEL" : L"INCONCLUSIVO";
+    metric(dc, 690, 169, L"PADRÃO OBSERVADO", pattern);
     text(dc, 52, 222, status, RGB(180, 197, 220));
 
     HBRUSH areaBrush = CreateSolidBrush(recording ? RGB(21, 51, 47) : RGB(31, 42, 58));
@@ -73,7 +78,10 @@ void DiagnosticPanel::draw(HDC dc, HWND window, const PenState& state, unsigned 
     DeleteObject(border);
 
     text(dc, area.left + 20, area.top + 18, L"ÁREA DE TESTE DA CANETA", RGB(226, 234, 247));
-    text(dc, area.left + 20, area.top + 46, L"Ponteiro aqui; Raw HID durante a sessão, mesmo sem foco.", RGB(151, 171, 198));
+    text(dc, area.left + 20, area.top + 46,
+         penInside ? L"Ponta na área; o padrão não altera a entrada do Windows."
+                   : L"Aproxime e encoste a ponta para avaliar o padrão da caneta.",
+         RGB(151, 171, 198));
     metric(dc, area.left + 20, area.top + 90, L"POINTER FLAGS", std::to_wstring(state.pointerFlags));
     metric(dc, area.left + 220, area.top + 90, L"PEN FLAGS", std::to_wstring(state.penFlags));
     metric(dc, area.left + 400, area.top + 90, L"POSIÇÃO", std::to_wstring(state.position.x) + L", " + std::to_wstring(state.position.y));

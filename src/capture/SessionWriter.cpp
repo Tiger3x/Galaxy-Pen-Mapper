@@ -41,7 +41,7 @@ std::string timestamp(const char* format) {
     return result.str();
 }
 
-using CsvRow = std::array<std::string, 35>;
+using CsvRow = std::array<std::string, 37>;
 
 CsvRow makeRow(const std::string& session, const std::string& description, const std::string& event) {
     CsvRow fields{};
@@ -76,7 +76,7 @@ bool SessionWriter::start(const std::wstring& name, const std::wstring& details)
     output.open(outputPath, std::ios::out | std::ios::trunc);
     if (!output) return false;
 
-    output << "session,description,timestamp,event,device,vid,pid,usage_page,usage,report_index,raw_hex,pointer_id,pointer_flags,pen_flags,pressure,tilt_x,tilt_y,rotation,x,y,input_source_device,input_source_origin,message_wparam,message_lparam,mouse_flags,mouse_button_flags,mouse_button_data,mouse_dx,mouse_dy,key_make_code,key_flags,key_vkey,raw_extra_information,window_foreground,raw_input_code\n";
+    output << "session,description,timestamp,event,device,vid,pid,usage_page,usage,report_index,raw_hex,pointer_id,pointer_flags,pen_flags,pressure,tilt_x,tilt_y,rotation,x,y,input_source_device,input_source_origin,message_wparam,message_lparam,mouse_flags,mouse_button_flags,mouse_button_data,mouse_dx,mouse_dy,key_make_code,key_flags,key_vkey,raw_extra_information,window_foreground,raw_input_code,pen_signature,raw_pressure\n";
     writeRow(output, makeRow(session, description, "SESSION_START"));
     output.flush();
     return true;
@@ -99,7 +99,8 @@ void SessionWriter::writePointer(const std::string& event, const PenState& state
     output.flush();
 }
 
-void SessionWriter::writeRaw(const RawHidReport& report, bool windowForeground, unsigned rawInputCode) {
+void SessionWriter::writeRaw(const RawHidReport& report, bool windowForeground, unsigned rawInputCode,
+                             const std::string& signature, std::optional<unsigned> rawPressure) {
     if (!active()) return;
     CsvRow fields = makeRow(session, description, "RAW_HID");
     fields[4] = utf8(report.deviceName);
@@ -111,6 +112,8 @@ void SessionWriter::writeRaw(const RawHidReport& report, bool windowForeground, 
     fields[10] = report.bytes;
     fields[33] = windowForeground ? "1" : "0";
     fields[34] = std::to_string(rawInputCode);
+    fields[35] = signature;
+    if (rawPressure) fields[36] = std::to_string(*rawPressure);
     writeRow(output, fields);
     output.flush();
 }

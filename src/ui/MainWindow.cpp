@@ -61,7 +61,7 @@ bool MainWindow::create(HINSTANCE instance, int showCommand) {
 
     if (!RegisterClassW(&windowClass) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
 
-    HWND window = CreateWindowExW(0, className, L"Galaxy Pen Diagnostic Studio — P002.5",
+    HWND window = CreateWindowExW(0, className, L"Galaxy Pen Diagnostic Studio — P002.6",
                                   WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                                   CW_USEDEFAULT, CW_USEDEFAULT, 1000, 720, nullptr, nullptr, instance, this);
     if (!window) return false;
@@ -101,12 +101,18 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
             const unsigned rawInputCode = GET_RAWINPUT_CODE_WPARAM(wParam);
             const auto input = rawHidCapture.process(reinterpret_cast<HRAWINPUT>(lParam));
             if (!input.hidReports.empty()) {
-                latestRaw.assign(input.hidReports.back().bytes.begin(), input.hidReports.back().bytes.end());
-                if (recording && sessionWriter.active()) {
-                    for (const auto& report : input.hidReports) {
-                        sessionWriter.writeRaw(report, windowForeground, rawInputCode);
+                for (const auto& report : input.hidReports) {
+                    const bool screenPenReport = signatureTracker.observe(report, PenSignatureTracker::TimePoint::clock::now());
+                    if (screenPenReport) latestRaw.assign(report.bytes.begin(), report.bytes.end());
+                    if (recording && sessionWriter.active()) {
+                        sessionWriter.writeRaw(report, windowForeground, rawInputCode,
+                                               screenPenReport ? penSignatureCode(signatureTracker.signature()) : "",
+                                               screenPenReport ? signatureTracker.rawPressure() : std::nullopt);
                         ++eventCount;
                     }
+                }
+                if (latestRaw.empty()) {
+                    latestRaw.assign(input.hidReports.back().bytes.begin(), input.hidReports.back().bytes.end());
                 }
                 scheduleRepaint();
             }
@@ -165,13 +171,18 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
                 ++eventCount;
             }
             if (LOWORD(wParam) == WA_INACTIVE && recording) {
-                status = L"Captura pausada: a janela precisa ficar em primeiro plano.";
+                status = L"Ponteiro fora de foco; Raw HID do digitizador continua gravado.";
                 scheduleRepaint();
             }
             return 0;
         case WM_TIMER:
             if (wParam == kForegroundTimer) {
                 recordForegroundSample(window);
+                const auto before = signatureTracker.signature();
+                const auto rawPressureBefore = signatureTracker.rawPressure();
+                signatureTracker.tick(PenSignatureTracker::TimePoint::clock::now());
+                if (before != signatureTracker.signature() ||
+                    rawPressureBefore != signatureTracker.rawPressure()) scheduleRepaint();
                 return 0;
             }
             if (wParam == kRefreshTimer && repaintPending) {
@@ -197,11 +208,13 @@ LRESULT MainWindow::handle(HWND window, UINT message, WPARAM wParam, LPARAM lPar
 
             if (buffer && bitmap) {
                 HGDIOBJ previousBitmap = SelectObject(buffer, bitmap);
-                panel.draw(buffer, window, penCapture.state(), eventCount, recording, penInside, status, latestRaw);
+                panel.draw(buffer, window, penCapture.state(), eventCount, recording, penInside, status,
+                           latestRaw, signatureTracker.signature(), signatureTracker.rawPressure());
                 BitBlt(dc, 0, 0, width, height, buffer, 0, 0, SRCCOPY);
                 SelectObject(buffer, previousBitmap);
             } else {
-                panel.draw(dc, window, penCapture.state(), eventCount, recording, penInside, status, latestRaw);
+                panel.draw(dc, window, penCapture.state(), eventCount, recording, penInside, status,
+                           latestRaw, signatureTracker.signature(), signatureTracker.rawPressure());
             }
 
             if (bitmap) DeleteObject(bitmap);
@@ -258,6 +271,7 @@ void MainWindow::clearPanel() {
     eventCount = 0;
     penInside = false;
     latestRaw.clear();
+    signatureTracker.reset();
     penCapture.clear();
     status = recording ? L"Gravando. Painel limpo." : L"Painel limpo. Pronto para nova captura.";
 }

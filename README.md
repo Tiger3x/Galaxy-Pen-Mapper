@@ -7,15 +7,16 @@ The first hardware target is the **Huion PW500** (from the HS611) used directly 
 ## Current status
 
 - **P001 — HID Scanner: implemented and build-validated**
-- **P002 — Pen Event Monitor: implemented and build-validated (P002.5)**
+- **P002 — Pen Event Monitor: implemented and build-validated (P002.6)**
 - **P003 — Comparative Capture: completed with four hardware paths**
 - **P004 — Input Classification: completed; HS611 button-time tip interruption recorded as established behavior**
+- **P005A — Tip-first pen-pattern probe: implemented; prospective on-device validation pending**
 
 ### P001 — GalaxyPenHidScanner.exe
 
 Enumerates HID interfaces and reports VID/PID, Usage Page/Usage, report sizes and Digitizer candidates.
 
-### P002.5 — GalaxyPenEventMonitor.exe
+### P002.6 — GalaxyPenEventMonitor.exe
 
 Native window-only test bench. Captures:
 
@@ -26,6 +27,7 @@ Native window-only test bench. Captures:
 - CSV logs for later S Pen vs PW500 comparison;
 - interpreted pen events inside the bordered test area; Raw Mouse and Raw Keyboard button/key events only while the monitor is in the foreground;
 - Digitizer Raw HID reports throughout a recording session, even if the monitor loses focus, plus a foreground sample about every 50 ms. The CSV records `window_foreground` and `raw_input_code` for Raw Input rows, with millisecond timestamps.
+- a conservative live WCOM pattern indicator for S Pen or probable PW500, plus raw pressure beside Windows pressure. `pen_signature` and `raw_pressure` are appended to Raw HID CSV rows. Hover-only or mixed evidence stays inconclusive; the indicator does not change Windows input.
 
 > A passive EMR pen normally does not enumerate as a separate USB/HID device on the display. The digitizer is the HID device; P002 observes how that digitizer reports each pen. The current captures show that the PW500's true pressure range cannot be recovered from the Galaxy display reports.
 
@@ -59,3 +61,4 @@ build-ninja\GalaxyPenEventMonitor.exe
 - [P002 — Pen Event Monitor](docs/P002-PEN-EVENT-MONITOR.md)
 - [P004 — Input Classification](docs/P004-INPUT-CLASSIFICATION.md)
 - [P005 — PW500 screen-button verification](docs/P005-SCREEN-BUTTON-TEST.md)
+- [P005A — Tip-first pen-pattern probe and test](docs/P005A-PEN-SIGNATURE.md)

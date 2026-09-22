@@ -44,7 +44,7 @@ int main() {
     report.usagePage = 0x0D;
     report.usage = 2;
     report.bytes = "28 00 04";
-    writer.writeRaw(report, false, RIM_INPUTSINK);
+    writer.writeRaw(report, false, RIM_INPUTSINK, "PW500_CANDIDATE", 4095);
     const auto path = writer.path();
     writer.stop();
 
@@ -55,12 +55,13 @@ int main() {
     while (std::getline(input, line)) rows.push_back(parseCsvRow(line));
     if (rows.size() != 5) return 3;
     for (size_t index = 0; index < rows.size(); ++index) {
-        if (rows[index].size() != 35) return 4;
+        if (rows[index].size() != 37) return 4;
         if (index != 0 && rows[index][1] != "description, with comma") return 4;
     }
     if (rows[2][3] != "FOREGROUND_SAMPLE" || rows[2][33] != "0") return 5;
     if (rows[3][3] != "RAW_HID" || rows[3][10] != "28 00 04" ||
-        rows[3][33] != "0" || rows[3][34] != "1") return 6;
+        rows[3][33] != "0" || rows[3][34] != "1" ||
+        rows[3][35] != "PW500_CANDIDATE" || rows[3][36] != "4095") return 6;
     if (rows[4][3] != "SESSION_STOP") return 7;
     std::cout << "CSV Raw HID/background fields verified\n";
     return 0;

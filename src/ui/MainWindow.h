@@ -4,6 +4,7 @@
 
 #include "../capture/SessionWriter.h"
 #include "../input/PenCapture.h"
+#include "../input/PenSignature.h"
 #include "../input/RawHidCapture.h"
 #include "DiagnosticPanel.h"
 
@@ -36,6 +37,7 @@ private:
     std::wstring status = L"Pronto para uma captura de diagnóstico.";
     std::wstring latestRaw;
     PenCapture penCapture;
+    PenSignatureTracker signatureTracker;
     RawHidCapture rawHidCapture;
     SessionWriter sessionWriter;
     DiagnosticPanel panel;
