@@ -1,54 +1,41 @@
-# P002 — Pen Event Monitor
+# P002 / P002.1 — Pen Event Monitor
 
-## Objetivo
+## P002.1: Window-only capture
 
-Capturar simultaneamente duas visões da caneta:
+The event monitor is now a native Windows GUI executable with no console window.
 
-1. **RAW_HID** — bytes que chegam pelas coleções HID Digitizer (Usage Page `0x0D`) quando o Windows permite Raw Input para aquela coleção;
-2. **WINDOWS_POINTER** — estado já interpretado pelo Windows através de `WM_POINTER` + `GetPointerPenInfo`.
+It records only while all of these conditions are true:
 
-Essa comparação é essencial: se a PW500 já chega com bits diferentes no HID, o remapeamento pode atuar na tradução; se o HID parecer normal e o erro surgir somente em `WM_POINTER`, o problema está em uma camada posterior da pilha de entrada.
+1. the user pressed **Iniciar captura**;
+2. the Galaxy Pen Event Monitor window is the foreground window;
+3. the pen is inside the bordered **ÁREA DE TESTE DA CANETA**.
 
-## Executável
+Events outside the capture area are ignored. Raw Input no longer uses `RIDEV_INPUTSINK`, so the application does not intentionally request background HID input.
 
-`GalaxyPenEventMonitor.exe`
+## What is observed
 
-Ao iniciar, ele cria um CSV no diretório atual:
+Two input layers are kept for diagnosis:
 
-`pen-events-AAAAMMDD-HHMMSS.csv`
+- **RAW_HID** — Digitizer reports from HID Usage Page `0x0D`, when exposed by Windows Raw Input;
+- **WINDOWS_POINTER** — Windows-interpreted pen state via `WM_POINTER` and `GetPointerPenInfo`.
 
-## Campos principais
+The live panel shows:
 
-- timestamp;
-- tipo do evento;
-- device path;
-- VID/PID;
-- Usage Page / Usage;
-- índice do relatório HID;
-- bytes brutos em hexadecimal;
-- pointer ID;
 - pointer flags;
-- pen flags;
+- pen flags such as BARREL / INVERTED / ERASER;
 - pressure;
-- tilt X/Y;
-- rotation;
-- X/Y.
+- tilt;
+- event count;
+- a preview of the most recent raw HID report.
 
-## Teste rápido P002
+## Controls
 
-Faça dentro da janela do monitor:
+- **Iniciar captura** — creates a new timestamped CSV and starts recording;
+- **Parar** — closes the CSV cleanly;
+- **Limpar painel** — clears the live values and counter.
 
-1. hover sem tocar por alguns segundos;
-2. 5 toques simples;
-3. um traço começando com pouca pressão e aumentando;
-4. botão inferior em hover e depois durante contato;
-5. botão superior em hover e depois durante contato;
-6. alguns traços normais.
+CSV format remains suitable for P003 comparative analysis.
 
-Faça primeiro com a **S Pen** e depois com a **Huion PW500**.
+## Safety
 
-Para a análise comparativa formal, a P003 irá separar as capturas em sessões rotuladas.
-
-## Segurança
-
-P002 é somente observação. Não instala driver, não injeta eventos e não modifica configurações HID.
+P002.1 is observation-only. It does not install a driver, replace the Samsung digitizer driver, inject input, block input, or remap buttons.
