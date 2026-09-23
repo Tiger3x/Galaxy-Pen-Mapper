@@ -22,7 +22,7 @@ Manual activation removes the need for a one-second pen-recognition delay on the
 
 The `--wcom-pen-report-lab` scanner option now checks the `COL04` descriptor and modifies report `0x1A` **only in memory**. On this machine it confirmed that the advertised pressure field occupies bytes 6–7 in the 15-byte report and that changing it can preserve the tip-contact and X/Y fields. That is a format check, not a live interception test. See [P001](P001-HID-SCANNER.md).
 
-`driver/PassThrough.c` is a minimal KMDF filter **source prototype**: it marks its device as a filter and defines no request queue or report transform. It built in Debug and Release with the Windows 10.0.26100 WDK; the produced `.sys` is unsigned. It has no INF, device binding, tray switch, or install procedure. A successful build alone does not prove it sits at the right point in the WCOM stack or that the pen remains usable. Until a separate isolated-device pass-through test, it must not be attached to the Galaxy digitizer.
+`driver/PassThrough.c` is a KMDF filter **source prototype**. Debug and Release have no request queue or report transform; the opt-in Probe build forwards reads with a completion callback and logs only report metadata. All three configurations built with the Windows 10.0.26100 WDK; the produced `.sys` files are unsigned. There is no INF, device binding, tray switch, or install procedure. A successful build alone does not prove it sits at the right point in the WCOM stack or that the pen remains usable. Until a separate isolated-device pass-through test, it must not be attached to the Galaxy digitizer. See the [stack and deployment gate](P007-STACK-GATE.md).
 
 ## Safety and validation gates
 

@@ -12,7 +12,7 @@ The first hardware target is the **Huion PW500** (from the HS611) used directly 
 - **P004 — Input Classification: completed; HS611 button-time tip interruption recorded as established behavior**
 - **P005A — Tip-first pen-pattern probe: implemented; existing captures suffice for the next gate**
 - **P005B — Input isolation: reviewed; no reliable general-desktop user-mode replacement path identified**
-- **P007 — Manual PW500 mode selected; offline report-layout check passed and pass-through filter compiled; no driver installed or device changed**
+- **P007 — Manual PW500 mode selected; offline report-layout check passed; pass-through and read-probe variants compiled, neither installed**
 
 ### P001 — GalaxyPenHidScanner.exe
 
@@ -64,6 +64,8 @@ MSBuild.exe driver\GalaxyPenPassThrough.vcxproj /p:Configuration=Debug /p:Platfo
 
 The tested output is an unsigned `.sys` with no INF or install package. Building it does not attach it to the pen. Do not install or bind this prototype to the Galaxy digitizer.
 
+The separate `Probe` configuration compiles a read-only observation path (`/p:Configuration=Probe`); it is also **not** installable at this stage. See the [P007 stack gate](docs/P007-STACK-GATE.md).
+
 ## Documentation
 
 - [Development plan](docs/PLAN.md)
@@ -74,3 +76,4 @@ The tested output is an unsigned `.sys` with no INF or install package. Building
 - [P005A — Tip-first pen-pattern probe and test](docs/P005A-PEN-SIGNATURE.md)
 - [P005B — Original-input isolation review](docs/P005B-INPUT-ISOLATION.md)
 - [P007 — Manual PW500 mode and safety contract](docs/P007-MANUAL-MODE.md)
+- [P007 — Device stack and deployment gate](docs/P007-STACK-GATE.md)
