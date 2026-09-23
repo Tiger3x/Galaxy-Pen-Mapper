@@ -66,6 +66,109 @@ bool IsDigitizer(const HIDP_CAPS& caps) {
     return caps.UsagePage == 0x0D;
 }
 
+bool RunPenReportLab(HANDLE device) {
+    PHIDP_PREPARSED_DATA preparsed = nullptr;
+    if (!HidD_GetPreparsedData(device, &preparsed)) {
+        std::wcout << L"  Laboratório: não foi possível ler a descrição HID.\n";
+        return false;
+    }
+
+    HIDP_CAPS caps{};
+    const bool matchingCollection = HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS &&
+                                    caps.UsagePage == 0x0D && caps.Usage == 0x02 &&
+                                    caps.InputReportByteLength == 15;
+    if (!matchingCollection) {
+        std::wcout << L"  Laboratório: coleção ou tamanho de relatório inesperado.\n";
+        HidD_FreePreparsedData(preparsed);
+        return false;
+    }
+
+    bool pressureCapability = false;
+    USHORT count = caps.NumberInputValueCaps;
+    std::vector<HIDP_VALUE_CAPS> values(count);
+    if (count != 0 && HidP_GetValueCaps(HidP_Input, values.data(), &count, preparsed) == HIDP_STATUS_SUCCESS) {
+        for (USHORT index = 0; index < count; ++index) {
+            const auto& value = values[index];
+            if (value.ReportID == 0x1A && value.UsagePage == 0x0D && !value.IsRange &&
+                value.NotRange.Usage == 0x30 && value.LogicalMin == 0 && value.LogicalMax == 4095 &&
+                value.ReportCount == 1) {
+                pressureCapability = true;
+                break;
+            }
+        }
+    }
+    if (!pressureCapability) {
+        std::wcout << L"  Laboratório: campo de pressão 0x1A/0x0D:0x30 não corresponde ao esperado.\n";
+        HidD_FreePreparsedData(preparsed);
+        return false;
+    }
+
+    std::wcout << L"  Laboratório: relatório 0x1A criado somente em memória; nada será enviado ao dispositivo.\n";
+    bool success = true;
+    for (const ULONG requested : {0UL, 699UL, 4095UL}) {
+        std::vector<char> report(caps.InputReportByteLength);
+        const NTSTATUS initialized = HidP_InitializeReportForID(HidP_Input, 0x1A, preparsed,
+                                                                 report.data(), static_cast<ULONG>(report.size()));
+        const NTSTATUS written = initialized == HIDP_STATUS_SUCCESS ?
+            HidP_SetUsageValue(HidP_Input, 0x0D, 0, 0x30, requested, preparsed,
+                               report.data(), static_cast<ULONG>(report.size())) : initialized;
+        ULONG observed = 0;
+        const NTSTATUS read = written == HIDP_STATUS_SUCCESS ?
+            HidP_GetUsageValue(HidP_Input, 0x0D, 0, 0x30, &observed, preparsed,
+                               report.data(), static_cast<ULONG>(report.size())) : written;
+        const bool roundTrip = read == HIDP_STATUS_SUCCESS && observed == requested &&
+                               static_cast<unsigned char>(report[0]) == 0x1A;
+        std::wcout << L"  Pressão solicitada=" << requested << L", lida=" << observed
+                   << L", resultado=" << (roundTrip ? L"OK" : L"FALHOU") << L", bytes=";
+        for (unsigned char byte : report) {
+            std::wcout << L' ' << std::hex << std::uppercase << std::setw(2) << std::setfill(L'0')
+                       << static_cast<unsigned>(byte);
+        }
+        std::wcout << std::dec << std::setfill(L' ') << L"\n";
+        success = success && roundTrip;
+    }
+
+    std::vector<char> contact(caps.InputReportByteLength);
+    const ULONG reportSize = static_cast<ULONG>(contact.size());
+    USAGE tipSwitch = 0x42;
+    ULONG tipCount = 1;
+    const bool contactReady =
+        HidP_InitializeReportForID(HidP_Input, 0x1A, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+        HidP_SetUsageValue(HidP_Input, 0x01, 0, 0x30, 15000, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+        HidP_SetUsageValue(HidP_Input, 0x01, 0, 0x31, 8000, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+        HidP_SetUsageValue(HidP_Input, 0x0D, 0, 0x30, 699, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+        HidP_SetUsages(HidP_Input, 0x0D, 0, &tipSwitch, &tipCount, preparsed,
+                       contact.data(), reportSize) == HIDP_STATUS_SUCCESS;
+    if (contactReady) {
+        const auto before = contact;
+        ULONG x = 0, y = 0, pressure = 0;
+        const bool modified =
+            HidP_SetUsageValue(HidP_Input, 0x0D, 0, 0x30, 1234, preparsed,
+                               contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+            HidP_GetUsageValue(HidP_Input, 0x01, 0, 0x30, &x, preparsed,
+                               contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+            HidP_GetUsageValue(HidP_Input, 0x01, 0, 0x31, &y, preparsed,
+                               contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+            HidP_GetUsageValue(HidP_Input, 0x0D, 0, 0x30, &pressure, preparsed,
+                               contact.data(), reportSize) == HIDP_STATUS_SUCCESS;
+        bool otherBytesIntact = true;
+        for (size_t index = 0; index < contact.size(); ++index) {
+            if (index != 6 && index != 7 && contact[index] != before[index]) otherBytesIntact = false;
+        }
+        const bool preserved = modified && otherBytesIntact && x == 15000 && y == 8000 &&
+                               pressure == 1234 && before[6] != contact[6] && before[7] != contact[7];
+        std::wcout << L"  Mudança de pressão com posição e ponta presentes: "
+                   << (preserved ? L"outros campos preservados" : L"FALHOU") << L"\n";
+        success = success && preserved;
+    } else {
+        std::wcout << L"  Laboratório: não foi possível montar contato com posição e ponta.\n";
+        success = false;
+    }
+
+    HidD_FreePreparsedData(preparsed);
+    return success;
+}
+
 void PrintInputCapabilities(PHIDP_PREPARSED_DATA preparsed, const HIDP_CAPS& caps) {
     USHORT valueCount = caps.NumberInputValueCaps;
     std::vector<HIDP_VALUE_CAPS> values(valueCount);
@@ -161,9 +264,10 @@ void PrintDevice(
 
 int wmain(int argc, wchar_t** argv) {
     SetConsoleOutputCP(CP_UTF8);
-    const bool detailedPen = argc == 2 && std::wstring_view(argv[1]) == L"--wcom-pen-caps";
+    const bool reportLab = argc == 2 && std::wstring_view(argv[1]) == L"--wcom-pen-report-lab";
+    const bool detailedPen = reportLab || (argc == 2 && std::wstring_view(argv[1]) == L"--wcom-pen-caps");
     if (argc != 1 && !detailedPen) {
-        std::wcerr << L"Uso: GalaxyPenHidScanner.exe [--wcom-pen-caps]\n";
+        std::wcerr << L"Uso: GalaxyPenHidScanner.exe [--wcom-pen-caps | --wcom-pen-report-lab]\n";
         return 2;
     }
 
@@ -220,7 +324,8 @@ int wmain(int argc, wchar_t** argv) {
         if (detailedPen) {
             std::wstring path = detail->DevicePath;
             std::transform(path.begin(), path.end(), path.begin(), [](wchar_t ch) { return std::towlower(ch); });
-            if (path.find(L"wcom016c&col01") == std::wstring::npos &&
+            if (reportLab && path.find(L"wcom016c&col04") == std::wstring::npos) continue;
+            if (!reportLab && path.find(L"wcom016c&col01") == std::wstring::npos &&
                 path.find(L"wcom016c&col04") == std::wstring::npos) continue;
         }
 
@@ -248,15 +353,21 @@ int wmain(int argc, wchar_t** argv) {
         }
 
         PrintDevice(index, detail->DevicePath, description, handle, detailedPen);
+        const bool labPassed = !reportLab || RunPenReportLab(handle);
         CloseHandle(handle);
         ++found;
+        if (!labPassed) {
+            SetupDiDestroyDeviceInfoList(devices);
+            return 1;
+        }
     }
 
     SetupDiDestroyDeviceInfoList(devices);
 
     std::wcout << L"\n============================================================\n";
     std::wcout << L"HIDs abertos e analisados: " << found << L"\n";
-    if (detailedPen) std::wcout << L"Consulta somente leitura às coleções WCOM016C&COL01 e COL04.\n";
+    if (reportLab) std::wcout << L"Laboratório em memória da coleção WCOM016C&COL04.\n";
+    else if (detailedPen) std::wcout << L"Consulta somente leitura às coleções WCOM016C&COL01 e COL04.\n";
     else std::wcout << L"Procure especialmente por entradas marcadas como CANDIDATO DIGITIZER.\n";
 
     return detailedPen && found == 0 ? 1 : 0;

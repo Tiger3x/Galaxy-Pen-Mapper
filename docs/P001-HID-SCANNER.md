@@ -43,3 +43,11 @@ For the focused, read-only WCOM collection inventory used by P007:
 ```powershell
 .\build-ninja\GalaxyPenHidScanner.exe --wcom-pen-caps
 ```
+
+For an **offline, in-memory** check of the `COL04` pen-report layout:
+
+```powershell
+.\build-ninja\GalaxyPenHidScanner.exe --wcom-pen-report-lab
+```
+
+The lab reads the live `COL04` HID descriptor, but creates and edits report `0x1A` only in process memory. It never writes a report to the device. On the tested Galaxy Book3 360, the descriptor reports a 15-byte input report and pressure usage `0x0D:0x30` with logical range 0–4095. The lab round-tripped 0, 699 and 4095; pressure changed bytes 6–7 while the synthetic tip-contact and X/Y fields stayed intact. This confirms the **advertised format**, not the bytes of a live `COL04` report or the feasibility of intercepting one. The earlier Raw Input captures came from the separate `COL01` helper collection.

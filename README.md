@@ -12,7 +12,7 @@ The first hardware target is the **Huion PW500** (from the HS611) used directly 
 - **P004 — Input Classification: completed; HS611 button-time tip interruption recorded as established behavior**
 - **P005A — Tip-first pen-pattern probe: implemented; existing captures suffice for the next gate**
 - **P005B — Input isolation: reviewed; no reliable general-desktop user-mode replacement path identified**
-- **P007 — Manual PW500 mode selected; driver-path architecture review next, with no driver installation or device changes**
+- **P007 — Manual PW500 mode selected; offline report-layout check passed and pass-through filter compiled; no driver installed or device changed**
 
 ### P001 — GalaxyPenHidScanner.exe
 
@@ -55,6 +55,14 @@ Executables:
 build-ninja\GalaxyPenHidScanner.exe
 build-ninja\GalaxyPenEventMonitor.exe
 ```
+
+The P007 filter source under `driver/` is a separate, non-installable WDK research project. The application and tests use Ninja as above; the kernel driver requires the Visual Studio 2022 WDK toolset and is compiled separately with MSBuild:
+
+```text
+MSBuild.exe driver\GalaxyPenPassThrough.vcxproj /p:Configuration=Debug /p:Platform=x64
+```
+
+The tested output is an unsigned `.sys` with no INF or install package. Building it does not attach it to the pen. Do not install or bind this prototype to the Galaxy digitizer.
 
 ## Documentation
 
