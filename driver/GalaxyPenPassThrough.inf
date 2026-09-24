@@ -1,0 +1,57 @@
+; Personal test package: device-specific KMDF filter. Release mode changes only pressure when enabled.
+; Target is the WCOM016C integrated pen collection, not the HIDClass setup class.
+
+[Version]
+; HISTORICAL COL04 PACKAGE. Do not install. Current packaging uses the two COL01 INFs.
+Signature="$WINDOWS NT$"
+Class=Extension
+ClassGuid={e2f84ce7-8efa-411c-aa69-97454ca4cb57}
+Provider=%ProviderName%
+ExtensionId={21B01D51-C2D4-48C5-A7D7-5FCE881A7D49}
+DriverVer=09/22/2026,0.1.0.0
+CatalogFile=GalaxyPenPassThrough.cat
+PnpLockdown=1
+
+[Manufacturer]
+%ProviderName%=Models,NTamd64.10.0...18362
+
+[Models.NTamd64.10.0...18362]
+%PenDescription%=Pen_Install,HID\VEN_WCOM&DEV_016C&Col04
+
+[Pen_Install.NT]
+CopyFiles=DriverCopyFiles
+
+[Pen_Install.NT.Services]
+AddService=GalaxyPenPassThrough,,FilterService
+
+[Pen_Install.NT.Filters]
+AddFilter=GalaxyPenPassThrough,,PenUpperFilter
+
+[PenUpperFilter]
+FilterPosition=Upper
+
+[FilterService]
+DisplayName=%ServiceDescription%
+Description=%ServiceDescription%
+ServiceType=1
+StartType=3
+ErrorControl=1
+ServiceBinary=%13%\GalaxyPenPassThrough.sys
+
+[DriverCopyFiles]
+GalaxyPenPassThrough.sys
+
+[DestinationDirs]
+DriverCopyFiles=13
+
+[SourceDisksNames]
+1=%DiskName%,,,
+
+[SourceDisksFiles]
+GalaxyPenPassThrough.sys=1
+
+[Strings]
+ProviderName="Galaxy Pen Mapper (personal test)"
+PenDescription="WCOM016C Integrated Pen Pass-Through Filter (test)"
+ServiceDescription="Galaxy Pen Mapper personal WCOM pen filter"
+DiskName="Galaxy Pen Mapper test package"

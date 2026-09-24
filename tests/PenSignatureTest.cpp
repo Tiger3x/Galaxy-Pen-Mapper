@@ -41,7 +41,7 @@ int main() {
     if (!check(tracker.signature() == PenSignature::Inconclusive, "Hover alone identified PW500")) return 4;
     for (int i = 0; i < 30; ++i) tracker.observe(report("2C", "FF 0F"), start + 4100ms + i * 5ms);
     if (!check(tracker.signature() == PenSignature::PW500Candidate &&
-               tracker.rawPressure() == 4095, "Sustained saturated PW500 pattern was not recognized")) return 5;
+               tracker.rawPressure() == 4095u, "Sustained saturated PW500 pattern was not recognized")) return 5;
 
     RawHidReport other = report("20");
     other.deviceName = L"Other digitizer";

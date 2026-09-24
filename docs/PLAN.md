@@ -1,70 +1,86 @@
-# Galaxy Pen Mapper — Development Plan
+# Galaxy Pen Mapper — plano atualizado (23/09/2026)
 
-## Goal
+## Marco atual e próxima etapa
 
-Understand the Galaxy Book3 360 pen input path, then improve the Huion PW500 where the captured signal and Windows input APIs allow it. Direct use on the Galaxy display remains the primary target; use through the HS611 is a separate, better-supported path.
+O usuário aprovou a evolução da versão 0.3.2 e autorizou publicar código e documentação no GitHub. A melhora de conforto em 800% foi relatada; o ganho exato usado após a ampliação não foi informado. Não converter essa aprovação em medição de força, compatibilidade geral ou aprovação de todos os níveis até 3.200%.
 
-## Evidence and feasibility
+Próxima etapa funcional: [P009 — botões laterais](P009-BUTTONS-PLAN.md), começando pela evidência já capturada e sem alterar a base funcional de ponta/pressão. Validação de ciclo de vida e aplicativos adicionais continua separada. Perfis/autostart permanecem posteriores. Os registros abaixo preservam a sequência histórica.
 
-| Route | What the captures establish | Practical limit |
-| --- | --- | --- |
-| PW500 on Galaxy display | WCOM reports pen position, but pressure starts near full scale, falls only under excessive force, and is usually saturated. During side-button actions with the tip held down, Windows contact restarts while WCOM reports either switch to `0x28`/zero pressure or pause. | The missing pressure range and distinct button identities are absent from the observed reports. A button-signal substitution proposed by the user is consistent with the captures, but the EMR signal is not measured directly. Software can offer only an explicitly degraded pressure mode unless new input evidence appears. |
-| PW500 through HS611 with Huion driver | Pressure varies normally. Configured button 1 arrives as injected `E`; configured button 2 arrives as injected right click. A steady tip is stable without buttons; during button use, the exposed Raw Digitizer contact can pause while the physical tip stays down. The user reports this as longstanding, normal HS611 behavior. | The Digitizer report does not identify the side buttons. Remapping their keyboard/mouse output alone will not preserve uninterrupted tip contact; this is not a defect to fix unless a requested workflow needs different behavior. |
-| PW500 through HS611 without Huion driver | Raw button states are visible, but the second button can be interpreted as contact with zero pressure. | A user-mode observer cannot assume it can suppress the original pen interpretation system-wide. |
+## Histórico de implementação e testes
 
-Windows exposes [Raw Input registration](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-rawinputdevice) for observation in an application and [synthetic pointer input](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-createsyntheticpointerdevice) for generating pen events. Neither API, by itself, establishes system-wide replacement of the original digitizer stream. Microsoft's [Virtual HID Framework](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/virtual-hid-framework--vhf-) is a driver route, not a user-mode shortcut.
+**0.3.2 instalada sem reinício do Windows:** atualização real aprovada, `oem34.inf` versão 0.3.2.0, hash do SYS correspondente, pilha correta e dispositivo OK. App novo em `build-sensitivity/driver/packages/col01-corrector` aberto para ajuste manual. Primeiro teste sugerido: 1.200%, piso 5%, depois aumentar só se necessário. Validação de conforto acima de 800% ainda pendente; não declarar pressão totalmente resolvida.
 
-## Phases
+**Novo relato de melhora em 800% e revisão 0.3.2:** usuário conseguiu usar bem menos força e pediu maior sensibilidade. Limite ampliado para 3.200%, padrão 800%, mínimo artificial 5% preservado. App/driver compilados em `build-sensitivity`; sete testes e pacote assinado aprovados. Uso real acima de 800% ainda pendente. Iniciar comparação em 1.200%, sem força excessiva. O relato atual atualiza o rumo: não tratar as sessões anteriores saturadas como prova de que amplificação nunca ajuda. Ver [alteração e roteiro](P007-SENSITIVITY-032.md).
 
-### P001 — HID Scanner ✅
-Enumerate Windows HID interfaces and identify Digitizer-class devices, VID/PID, usages and report sizes.
+**Captura A/B concluída e Corrector restaurado:** 9.150 relatórios por observador, sem perdas. Nos 9.138 pares únicos, o Samsung só mudou flags de ferramenta; pressão permaneceu idêntica. A pressão já chegava em 4095 em 7.684/7.685 amostras do grupo de contato anterior ao Samsung. 12 ambiguidades foram excluídas, mantendo o resultado global inconclusivo do coletor e limitando as conclusões ao subconjunto único. Não prometer sensibilidade confortável por ajuste de ganho; saturação anterior ao Samsung demonstrada nesta sessão, causa abaixo dessa fronteira ainda não isolada. Corrector 0.3.1 restaurado (`oem34.inf`), pilha/saúde/hash verificados, sem novo reboot. App de bandeja fechado; ativação manual não presumida. Ver [resultado real A/B](P007-AB-LIVE-RESULT.md). Os itens abaixo são históricos.
 
-**Exit criterion:** scanner builds successfully and can identify Galaxy digitizer-related HID interfaces from a real-machine capture.
+**Diagnóstico A/B instalado após reinício do usuário:** pendências de serviços desapareceram; instalação elevada 04 concluída sem novo reboot. Pilha real confirmada `GalaxyPenDiagA > PenS2Helper > GalaxyPenDiagB > mshidkmdf`, dispositivo OK e preflight do coletor aprovado. Corrector temporariamente ausente; borracha pode reaparecer durante o experimento. Ainda não houve captura A/B nem comprovação de leituras/pareamento. Próximo passo: captura de 30 segundos quando o usuário estiver pronto, somente pressão confortável, seguida de análise e restauração. Backup desta instalação: `build-diagnostic/recovery/e9575c94a0fb49b3a0178e7dc93c4a41`. Os estados abaixo são históricos.
 
-### P002 — Pen Event Monitor ✅
-Capture Digitizer Raw Input reports plus Windows-interpreted pen events (`WM_POINTER` / `GetPointerPenInfo`) with timestamps.
+**Tentativa diagnóstica autorizada, ainda não concluída:** corrigidos dois erros no instalador (colisão `$Matches` e identificador SetupAPI). O Corrector 0.3.1 foi restaurado e seu binário/pilha confirmados, sem reiniciar Windows; nenhum observador foi anexado e nenhuma captura A/B ocorreu. Nova instalação bloqueada por serviços diagnósticos STOPPED, desativados e marcados para exclusão pelo Windows. Próximo passo seguro: após reinício voluntário, executar Check e conferir ausência dos serviços residuais antes de instalar novamente. Não forçar limpeza, não pedir teste com força elevada. Ver [estado e evidências](P007-DIAGNOSTIC-DEPLOYMENT.md).
 
-**Exit criterion:** Windows build and real-hardware CSV captures validated on the Galaxy Book. The P002.5 monitor records keyboard/mouse channels and Windows input-source metadata, and separates Digitizer Raw HID observation from foreground state.
+**Implantação diagnóstica preparada, não executada:** pacote primitivo A/B assinado e verificado; gerenciador Check/Install/Restore com backup íntegro, diário persistente, alvo fixo, comparação da lista original e trava pela pilha real. Estratégia de posicionamento: lista legacy por instância, sem alterar o pacote Samsung. Testes simulados de falha/reboot/restauração aprovados; Check real aprovado. Instalação e estabilidade física não validadas; dependem de autorização específica e revisão da recuperação. Veja [procedimento e limites](P007-DIAGNOSTIC-DEPLOYMENT.md).
 
-### P003 — Comparative Capture ✅
-Record controlled, labeled sequences with:
-1. Samsung S Pen;
-2. Huion PW500 directly on the Galaxy display;
-3. PW500 through the Huion HS611.
+**Diagnóstico anterior/posterior ao Samsung preparado:** protótipo A/B e coletor em projeto separado, compilados com Ninja/WDK e testes offline aprovados. Sem instalação, INF ou assinatura; driver 0.3.1 preservado. Posicionamento garantido ao redor do Samsung e rollback de implantação ainda pendentes: o INF base não fornece níveis para simplesmente inserir dois filtros em ordem garantida. O coletor bloqueia a pilha atual antes de iniciar captura. Veja [preparação e limites](P007-DIAGNOSTIC-PREPARATION.md). Não declarar o experimento pronto para instalar.
 
-**Exit criterion:** achieved with four real-hardware captures: S Pen on screen, PW500 on screen, and PW500 through HS611 with and without the Huion driver.
+**Novo resultado com força elevada:** `ponta-20260923-184127.csv` confirmou pressão variável 51–1024, 174 valores distintos em 3.189 contatos, sem borracha/inversão. A variação está demonstrada nessa condição, mas a exigência de muita força relatada pelo usuário mantém o aceite de sensibilidade confortável em aberto. Não repetir com força excessiva. Os resultados de saturação abaixo são históricos da sessão de toque anterior, não prova de ausência absoluta de variação.
 
-### P004 — Input Classification ✅
-Map report bits/usages to tip, barrel buttons, pressure, proximity and other states. Determine where the double-click/disable behavior originates.
+**Situação atual 0.3.1:** atualização real concluída sem reiniciar Windows. Mínimo 5% confirmado: 1.542 contatos com pressão Windows 51, sem borracha; fora de contato, zero. O painel confirmou 6.176/6.176 contatos brutos saturados em 4095 antes da correção. Pressão dinâmica não resolvida: ganho não recupera variação ausente nesta entrada. A medição não separa hardware de processamento anterior por outros componentes. Não repetir teste com mais força nem reinstalar por esse resultado. Relato detalhado em [resultado real](P007-LIVE-RESULT.md). Os registros seguintes documentam a sequência anterior.
 
-**Result:** the main pen and button paths are identified. The screen pressure response is reversed in its small usable range and predominantly saturated. During screen-button use, WCOM contact is not continuously preserved: the recorded reports can change to hover/zero pressure or stop temporarily. On the HS611, the driver emits configured button actions as injected keyboard/mouse input. The control capture held one Raw contact for 28.14 seconds without buttons. The user intentionally lifted the tip after that baseline, then kept it physically down during button use; the later button phase nevertheless contains Raw contact releases. For button 1, three Raw releases occurred within 5, 2 and 2 ms of the injected `E` releases. See [P004 classification](P004-INPUT-CLASSIFICATION.md).
+**Paint validado pelo usuário:** PW500 funcionou como lápis, sem borracha involuntária, após orientação para usar apenas a correção de ponta. Marco de ferramenta em aplicativo externo aprovado. A pendência funcional principal passa a ser pressão; testes de ciclo de vida continuam separados.
 
-**Exit criterion:** input channels, steady-tip baseline and physical-tip state during button use are established. The user confirms that tip interruption during HS611 button actions has long been normal in their workflow; do not classify it as a new fault. The exact internal mechanism need not be isolated for the primary Galaxy display goal. Tilt and distance mapping remain optional unless a later feature needs them.
+**Teste de pressão:** `ponta-20260923-180727.csv` confirmou traço sem borracha, porém pressão Windows 0 em todos os 3.156 contatos. Traço fino não equivale a pressão dinâmica resolvida. Rever o piso de saída/quantização e validar aplicativo externo; respeitar o limite de saturação do sinal original.
 
-### P005 — User-mode Feasibility Gate
-Keep direct use on the Galaxy display as the first question. At the user's request, prioritize the tip and pressure; side-button remapping is not part of the current success criterion. The user chose a manual tray toggle for PW500 mode, so automatic S Pen/PW500 recognition is no longer a requirement for the correction path. Verify whether the original erroneous pen events can be replaced rather than supplemented. Raw Input observation alone is not suppression. Do not promise pressure correction in other applications until this gate passes.
+**Ponta validada em hardware:** após ativação manual, o novo CSV apresentou 1.359 eventos sem borracha/inversão e 480 de contato; a interface mostrou 2.428 relatórios alterados e traços azuis. Correção de ferramenta até WM_POINTER comprovada. Restam pressão, aplicativo externo e estabilidade de ciclo de vida.
 
-**Completed focus check:** the combined P002.5 screen capture `pen-events-20260922-184037.csv` contains 412 foreground samples, all `1`, and 5,817 Raw HID rows, all received as foreground input. The WCOM stream itself reports `0x00` releases and `0x28` hover intervals during pointer-contact interruptions. A focus-only recording artifact is not the explanation. The user tested button 1 before button 2, but the exact transition is inferred rather than logged. Further button-specific work is parked.
+**Avanço após reinício:** rollback COL04 concluído. Corrector 0.3.0 instalado/carregado em COL01 como `oem188.inf`, sem outro reinício; dispositivos OK e Tray conectado/desligado. Aguarda teste físico de leitura e desenho. Isso conclui os passos 1 e 2 da seção de próximo aceite; não conclui a validação real.
 
-**P005A retrospective gate:** the existing S Pen and PW500 tip captures are sufficient to move on without requesting another pair of captures. The [conservative pen-pattern probe](P005A-PEN-SIGNATURE.md) separates those labeled sessions in replay, but is now diagnostic only: the manual toggle, not this heuristic, chooses whether correction is active.
+## Objetivo
 
-**P005B user-mode gate:** [input-isolation review](P005B-INPUT-ISOLATION.md) found no documented, reliable device-specific way for this observer to stop the original PW500 pen stream from reaching unrelated Windows applications. `RIDEV_NOLEGACY` is limited to mouse and keyboard; a synthetic pen adds input rather than replacing the original. A program controlling its own canvas can choose how to handle its `WM_POINTER` messages, but that does not isolate Blender, Photoshop or the desktop. Cross-process hooks have coverage and stability limits and are not a suitable default replacement mechanism. Therefore P006 remains disabled for the general desktop goal; do not inject a second pen stream merely to demonstrate it is possible.
+**Primeiro teste real COL01:** leitura confirmada (15.128 relatórios, zero alterações/falhas registradas com modo desligado). O CSV `ponta-20260923-180107.csv` confirmou entrada original como borracha/invertida e pressão de contato 1024. Próximo marco: testar normalização de ponta, ainda sem inversão de pressão.
 
-**Next research gate:** P007 architecture review, without installing or changing a driver. The machine has an I²C HID parent `ACPI\WCOM016C\1`, a `COL01` helper collection that supplies the captured Raw report `0x02`, and a separate Windows pen collection `COL04` whose descriptor advertises report `0x1A`. An in-memory report lab confirmed the advertised `COL04` pressure field at bytes 6–7, but no live `COL04` input has been intercepted. Determine whether a narrowly scoped filter can modify that original report in place, with no second pen stream, and leave it unchanged when manually disabled. Automatic pen identification is not required. Establish a safe development/test environment before any deployment decision. The saturated Raw samples still do not contain the lost force information. See [manual PW500 mode](P007-MANUAL-MODE.md).
+Usar a PW500 diretamente na tela do Galaxy Book3 360, com ativação manual pela bandeja, ponta reconhecida como caneta e pressão ajustável dentro do sinal disponível. Prioridade: ponta e traço; botões são opcionais. Não exigir distinção automática entre PW500 e S Pen.
 
-The HS611 with driver is an independent, opt-in remapper branch. The Huion driver already assigns each button; build additional remapping only if the user wants behavior the driver cannot supply. In that case, use uniquely identifiable assignments where available, preserve physical keyboard/mouse use, prevent duplicate actions, and provide an immediate off switch.
+## Evidência consolidada
 
-**Exit criterion:** the general-desktop user-mode path is closed unless a specific supported isolation mechanism is found. A target-application integration remains a separate optional branch, not proof of system-wide replacement. Do not substitute the easier HS611 result for direct-display success.
+As capturas existentes são suficientes para implementar/testar offline: não solicitar repetição ampla. PW500 COL01 apresenta `0x28` (Invert em hover) e `0x2C` (Invert + Eraser no contato, sem Tip normal). O descritor real confirma a interpretação; explica o Paint escolher borracha. S Pen de referência apresenta `0x20/0x21`.
 
-### P006 — Synthetic Pen Feasibility (conditional)
-Paused for the general-desktop goal. Resume only if P005 finds a credible way to exclude the original stream. Injecting a second pen stream alone creates duplicates. A degraded-pressure experiment may invert and expand only the narrow varying range or simulate pressure; it cannot recover force information from saturated samples.
+A pressão bruta 0–4095 fica predominantemente saturada e cai com força. Inversão e ganho só aproveitam a variação residual. Não reconstruir pressão física ausente nem pedir força excessiva. Na HS611 com driver a pressão é normal e os botões emitem E/clique direito; as interrupções durante botões são comportamento antigo confirmado pelo usuário. Não confundir essa rota com a tela nem afirmar teste sem driver quando o usuário informa que ele já estava instalado.
 
-### P007 — Driver Path (only if necessary)
-The P005B review established that general-desktop replacement is such a need. Evaluate a narrowly scoped input filter first; a virtual HID source is a fallback only if original input can also be excluded. The I²C HID parent exposes several collections, so the location and pass-through behavior of a filter must be validated before touching the live device. The offline `COL04` format check and compilation of pass-through/Probe KMDF variants are complete; neither proves live interception. The [stack gate](P007-STACK-GATE.md) identifies a device-specific `COL04` upper filter as a candidate, but requires isolated pass-through testing, package verification, signing and rollback before any on-device test. Per the user's choice, do not block on automatic pen classification: a tray-controlled PW500 mode will be off by default. Its intended users may not have an S Pen, so S Pen behavior while the mode is on is not a product criterion. Off must still leave the original input unchanged. A driver can change routing and interpretation, but cannot reconstruct pressure values that the digitizer never reports. Installing or replacing the Galaxy digitizer driver remains outside the current research step. [P007 mode and safety contract](P007-MANUAL-MODE.md).
+## Marcos
 
-### P008 — Profiles and UI
-The manual tray on/off control is part of P007's safety requirement, not a late optional profile feature. After the input mechanism passes its on-device test, add optional per-application profiles (Blender, Photoshop, Windows), autostart and diagnostic export. Do not build profiles around an unverified remapping mechanism.
+| Marco | Estado e critério |
+| --- | --- |
+| P001/P002 — Scanner e monitor | Implementados; capturas reais e laboratório em memória disponíveis. |
+| P003/P004 — Comparação/classificação | Evidência suficiente para ponta; mecanismo elétrico e distinção de botões não comprovados. |
+| P005 — Substituição por EXE | Raw Input e injeção sintética não demonstram substituição confiável em todo o desktop. |
+| P006 — Caneta sintética | Pausada; não gerar segunda entrada para simular solução. |
+| P007A — Filtro COL04 | Rejeitado por ausência de leituras. Remoção e descarga concluídas. |
+| P007B — Revisão COL01 | Interceptação e ferramenta confirmadas em 0.3.0; pressão 0.3.1 instalada, aceite físico pendente. |
+| P007C — Captura interna da ponta | Confirmada por CSV real e comparação original/corrigido; pressão anterior zero identificada. |
+| P007D — Atualização sem reinícios evitáveis | Troca real 0.3.0 → 0.3.1 aprovada com reinício só da coleção. Não garante todas as futuras trocas sem reboot. |
+| P008 — Perfis/autostart | Adiados até o caminho real passar. |
 
-## Safety rule
+## Implementação atual
 
-Do not install or replace the Galaxy Book digitizer driver during early research. P001–P006 must remain reversible and non-destructive. Keep the diagnostic monitor observation-only.
+Motor compartilhado entre testes e filtro: modo off preserva tudo; quando autorizado, normaliza somente flags PW500 conhecidas em report 0x02/15 bytes. Pressão é opção separada. A ativação aguarda levantamento da ponta; mudanças de configuração invalidam leituras antigas; fechamento, suspensão e expiração desarmam. Probe rejeita ativação no kernel. A interface valida versão/capacidades, usa uma única instância e distingue dados de entrada/saída do driver dos eventos recebidos pelo Windows.
+
+O novo dispositivo de controle é criado durante anexação e excluído na remoção do último filtro. Isso corrige o vazamento de ciclo de vida anterior, mas não é prova de atualização sem reinício em todas as condições.
+
+## Verificação realizada
+
+- Ninja e sete CTests.
+- Replay de 11 arquivos: 85.494 relatórios COL01, 75.073 normalizações; desligado e demais campos preservados. Temporização testada separadamente.
+- Descritor HID real: ponta, pressão e posição validados somente em memória.
+- WDK/análise estática, INF, catálogos, assinaturas e hashes.
+- Inspeção visual da interface; não substitui teste físico da caneta.
+
+## Próximo passo e conclusão real
+
+1. Concluído: teste 0.3.1 confirmou mínimo positivo e entrada bruta totalmente saturada nesta sessão.
+2. Pressão dinâmica permanece pendente; investigar evidência anterior/limitações antes do filtro antes de propor nova alteração. Não substituir força por velocidade ou simulação sem escolha explícita do usuário.
+3. Confirmar comportamento da nova pressão em aplicativo externo.
+4. Testar desligamento, fechamento e suspensão/retomada. Atualização local já passou uma vez; manter as proteções nas próximas trocas.
+
+A meta só estará concluída após essas verificações em hardware. Não afirmar que o projeto está totalmente funcional só porque compilou. Falhas de interceptação, ciclo PnP e pressão residual continuam sendo riscos explícitos.
+
+Veja [modo e campo de teste](P007-MANUAL-MODE.md), [atualização](P007-STACK-GATE.md) e [resultado real](P007-LIVE-RESULT.md).

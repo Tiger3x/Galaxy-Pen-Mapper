@@ -3,10 +3,14 @@
 #include <hidsdi.h>
 #include <hidpi.h>
 
+#include "GalaxyPenToolFlags.h"
+#include "GalaxyPenEngine.h"
+
 #include <algorithm>
 #include <cwctype>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -66,7 +70,65 @@ bool IsDigitizer(const HIDP_CAPS& caps) {
     return caps.UsagePage == 0x0D;
 }
 
-bool RunPenReportLab(HANDLE device) {
+bool RunWcomFlagLab(HANDLE device) {
+    PHIDP_PREPARSED_DATA preparsed = nullptr;
+    if (!HidD_GetPreparsedData(device, &preparsed)) return false;
+
+    HIDP_CAPS caps{};
+    const bool valid = HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS &&
+                       caps.UsagePage == 0x0D && caps.Usage == 0x02 &&
+                       caps.InputReportByteLength == 15;
+    if (!valid) {
+        HidD_FreePreparsedData(preparsed);
+        return false;
+    }
+
+    std::wcout << L"Decodificação em memória dos bytes de estado observados em COL01:\n";
+    const auto decode = [&](std::vector<char>& report, const wchar_t* label) {
+        USAGE usages[16]{};
+        ULONG count = static_cast<ULONG>(std::size(usages));
+        const NTSTATUS status = HidP_GetUsages(HidP_Input, 0x0D, 0, usages, &count,
+                                               preparsed, report.data(),
+                                               static_cast<ULONG>(report.size()));
+        if (status != HIDP_STATUS_SUCCESS) {
+            std::wcout << label << L"0x" << std::hex
+                       << static_cast<unsigned>(static_cast<unsigned char>(report[1]))
+                       << L": falha 0x" << static_cast<unsigned long>(status)
+                       << std::dec << L"\n";
+            return false;
+        }
+        const auto active = [&](USAGE usage) {
+            return std::find(usages, usages + count, usage) != usages + count;
+        };
+        std::wcout << label << L"0x" << std::hex
+                   << static_cast<unsigned>(static_cast<unsigned char>(report[1])) << std::dec
+                   << L": ponta=" << active(0x42)
+                   << L", invertido=" << active(0x3C)
+                   << L", borracha=" << active(0x45)
+                   << L", alcance=" << active(0x32)
+                   << L", botão lateral=" << active(0x44)
+                   << L"\n";
+        return true;
+    };
+
+    bool success = true;
+    constexpr unsigned char observedFlags[] = {0x20, 0x21, 0x28, 0x2C};
+    for (const unsigned char flag : observedFlags) {
+        std::vector<char> report(caps.InputReportByteLength);
+        report[0] = 0x02;
+        report[1] = static_cast<char>(flag);
+        success = decode(report, L"  observado ") && success;
+        if (GalaxyPenNormalizePw500ToolFlags(
+                reinterpret_cast<unsigned char*>(report.data()), report.size()) != 0) {
+            success = decode(report, L"    proposta ") && success;
+        }
+    }
+
+    HidD_FreePreparsedData(preparsed);
+    return success;
+}
+
+bool RunPenReportLab(HANDLE device, UCHAR reportId = 0x1A) {
     PHIDP_PREPARSED_DATA preparsed = nullptr;
     if (!HidD_GetPreparsedData(device, &preparsed)) {
         std::wcout << L"  Laboratório: não foi possível ler a descrição HID.\n";
@@ -89,7 +151,7 @@ bool RunPenReportLab(HANDLE device) {
     if (count != 0 && HidP_GetValueCaps(HidP_Input, values.data(), &count, preparsed) == HIDP_STATUS_SUCCESS) {
         for (USHORT index = 0; index < count; ++index) {
             const auto& value = values[index];
-            if (value.ReportID == 0x1A && value.UsagePage == 0x0D && !value.IsRange &&
+            if (value.ReportID == reportId && value.UsagePage == 0x0D && !value.IsRange &&
                 value.NotRange.Usage == 0x30 && value.LogicalMin == 0 && value.LogicalMax == 4095 &&
                 value.ReportCount == 1) {
                 pressureCapability = true;
@@ -98,16 +160,17 @@ bool RunPenReportLab(HANDLE device) {
         }
     }
     if (!pressureCapability) {
-        std::wcout << L"  Laboratório: campo de pressão 0x1A/0x0D:0x30 não corresponde ao esperado.\n";
+        std::wcout << L"  Laboratório: campo de pressão não corresponde ao esperado.\n";
         HidD_FreePreparsedData(preparsed);
         return false;
     }
 
-    std::wcout << L"  Laboratório: relatório 0x1A criado somente em memória; nada será enviado ao dispositivo.\n";
+    std::wcout << L"  Laboratório: relatório 0x" << std::hex << static_cast<unsigned>(reportId)
+               << std::dec << L" criado somente em memória; nada será enviado ao dispositivo.\n";
     bool success = true;
     for (const ULONG requested : {0UL, 699UL, 4095UL}) {
         std::vector<char> report(caps.InputReportByteLength);
-        const NTSTATUS initialized = HidP_InitializeReportForID(HidP_Input, 0x1A, preparsed,
+        const NTSTATUS initialized = HidP_InitializeReportForID(HidP_Input, reportId, preparsed,
                                                                  report.data(), static_cast<ULONG>(report.size()));
         const NTSTATUS written = initialized == HIDP_STATUS_SUCCESS ?
             HidP_SetUsageValue(HidP_Input, 0x0D, 0, 0x30, requested, preparsed,
@@ -117,7 +180,7 @@ bool RunPenReportLab(HANDLE device) {
             HidP_GetUsageValue(HidP_Input, 0x0D, 0, 0x30, &observed, preparsed,
                                report.data(), static_cast<ULONG>(report.size())) : written;
         const bool roundTrip = read == HIDP_STATUS_SUCCESS && observed == requested &&
-                               static_cast<unsigned char>(report[0]) == 0x1A;
+                               static_cast<unsigned char>(report[0]) == reportId;
         std::wcout << L"  Pressão solicitada=" << requested << L", lida=" << observed
                    << L", resultado=" << (roundTrip ? L"OK" : L"FALHOU") << L", bytes=";
         for (unsigned char byte : report) {
@@ -133,7 +196,7 @@ bool RunPenReportLab(HANDLE device) {
     USAGE tipSwitch = 0x42;
     ULONG tipCount = 1;
     const bool contactReady =
-        HidP_InitializeReportForID(HidP_Input, 0x1A, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+        HidP_InitializeReportForID(HidP_Input, reportId, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
         HidP_SetUsageValue(HidP_Input, 0x01, 0, 0x30, 15000, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
         HidP_SetUsageValue(HidP_Input, 0x01, 0, 0x31, 8000, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
         HidP_SetUsageValue(HidP_Input, 0x0D, 0, 0x30, 699, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
@@ -141,6 +204,12 @@ bool RunPenReportLab(HANDLE device) {
                        contact.data(), reportSize) == HIDP_STATUS_SUCCESS;
     if (contactReady) {
         const auto before = contact;
+        std::wcout << L"  Contato sintético antes de alterar pressão, bytes=";
+        for (unsigned char byte : before) {
+            std::wcout << L' ' << std::hex << std::uppercase << std::setw(2) << std::setfill(L'0')
+                       << static_cast<unsigned>(byte);
+        }
+        std::wcout << std::dec << std::setfill(L' ') << L"\n";
         ULONG x = 0, y = 0, pressure = 0;
         const bool modified =
             HidP_SetUsageValue(HidP_Input, 0x0D, 0, 0x30, 1234, preparsed,
@@ -159,12 +228,48 @@ bool RunPenReportLab(HANDLE device) {
                                pressure == 1234 && before[6] != contact[6] && before[7] != contact[7];
         std::wcout << L"  Mudança de pressão com posição e ponta presentes: "
                    << (preserved ? L"outros campos preservados" : L"FALHOU") << L"\n";
+        std::wcout << L"  Contato sintético depois de alterar pressão, bytes=";
+        for (unsigned char byte : contact) {
+            std::wcout << L' ' << std::hex << std::uppercase << std::setw(2) << std::setfill(L'0')
+                       << static_cast<unsigned>(byte);
+        }
+        std::wcout << std::dec << std::setfill(L' ') << L"\n";
         success = success && preserved;
     } else {
         std::wcout << L"  Laboratório: não foi possível montar contato com posição e ponta.\n";
         success = false;
     }
 
+    if (reportId == 0x02 && contactReady) {
+        // Run the exact driver engine against a report built by the HID parser.
+        GALAXY_PEN_ENGINE engine{1, 0, 0, 0, 0, 4500, 5};
+        contact[1] = 0x2C;
+        const bool pressureWritten = HidP_SetUsageValue(HidP_Input, 0x0D, 0, 0x30, 4000,
+            preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS;
+        const auto before = contact;
+        auto hover = contact;
+        hover[1] = 0x28;
+        hover[6] = hover[7] = 0;
+        GalaxyPenEngineConfigure(&engine, 1, 1, 4500, 5, 100);
+        GalaxyPenEngineProcess(&engine, reinterpret_cast<unsigned char*>(hover.data()), hover.size(), engine.Generation, 101);
+        const bool changed = GalaxyPenEngineProcess(&engine, reinterpret_cast<unsigned char*>(contact.data()),
+            contact.size(), engine.Generation, 102) != 0;
+        ULONG x = 0, y = 0, pressure = 0;
+        USAGE usages[16]{};
+        ULONG usageCount = static_cast<ULONG>(std::size(usages));
+        bool correct = pressureWritten && changed &&
+            HidP_GetUsageValue(HidP_Input, 0x01, 0, 0x30, &x, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+            HidP_GetUsageValue(HidP_Input, 0x01, 0, 0x31, &y, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+            HidP_GetUsageValue(HidP_Input, 0x0D, 0, 0x30, &pressure, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS &&
+            HidP_GetUsages(HidP_Input, 0x0D, 0, usages, &usageCount, preparsed, contact.data(), reportSize) == HIDP_STATUS_SUCCESS;
+        const auto active = [&](USAGE usage) { return std::find(usages, usages + usageCount, usage) != usages + usageCount; };
+        correct = correct && x == 15000 && y == 8000 && pressure == 632 && active(0x42) && !active(0x3C) && !active(0x45);
+        for (size_t i = 0; i < contact.size(); ++i) {
+            if (i != 1 && i != 6 && i != 7 && contact[i] != before[i]) correct = false;
+        }
+        std::wcout << L"  Motor COL01 (ponta + pressão + posição preservada): " << (correct ? L"OK" : L"FALHOU") << L"\n";
+        success = success && correct;
+    }
     HidD_FreePreparsedData(preparsed);
     return success;
 }
@@ -265,9 +370,11 @@ void PrintDevice(
 int wmain(int argc, wchar_t** argv) {
     SetConsoleOutputCP(CP_UTF8);
     const bool reportLab = argc == 2 && std::wstring_view(argv[1]) == L"--wcom-pen-report-lab";
-    const bool detailedPen = reportLab || (argc == 2 && std::wstring_view(argv[1]) == L"--wcom-pen-caps");
+    const bool flagLab = argc == 2 && std::wstring_view(argv[1]) == L"--wcom-flag-lab";
+    const bool col01Lab = argc == 2 && std::wstring_view(argv[1]) == L"--wcom-col01-report-lab";
+    const bool detailedPen = reportLab || flagLab || col01Lab || (argc == 2 && std::wstring_view(argv[1]) == L"--wcom-pen-caps");
     if (argc != 1 && !detailedPen) {
-        std::wcerr << L"Uso: GalaxyPenHidScanner.exe [--wcom-pen-caps | --wcom-pen-report-lab]\n";
+        std::wcerr << L"Uso: GalaxyPenHidScanner.exe [--wcom-pen-caps | --wcom-pen-report-lab | --wcom-col01-report-lab | --wcom-flag-lab]\n";
         return 2;
     }
 
@@ -325,6 +432,7 @@ int wmain(int argc, wchar_t** argv) {
             std::wstring path = detail->DevicePath;
             std::transform(path.begin(), path.end(), path.begin(), [](wchar_t ch) { return std::towlower(ch); });
             if (reportLab && path.find(L"wcom016c&col04") == std::wstring::npos) continue;
+            if ((flagLab || col01Lab) && path.find(L"wcom016c&col01") == std::wstring::npos) continue;
             if (!reportLab && path.find(L"wcom016c&col01") == std::wstring::npos &&
                 path.find(L"wcom016c&col04") == std::wstring::npos) continue;
         }
@@ -352,8 +460,13 @@ int wmain(int argc, wchar_t** argv) {
             continue;
         }
 
-        PrintDevice(index, detail->DevicePath, description, handle, detailedPen);
-        const bool labPassed = !reportLab || RunPenReportLab(handle);
+        if (flagLab) {
+            std::wcout << L"COL01: " << description << L"\n";
+        } else {
+            PrintDevice(index, detail->DevicePath, description, handle, detailedPen);
+        }
+        const bool labPassed = flagLab ? RunWcomFlagLab(handle) :
+            (col01Lab ? RunPenReportLab(handle, 0x02) : (!reportLab || RunPenReportLab(handle)));
         CloseHandle(handle);
         ++found;
         if (!labPassed) {
@@ -367,6 +480,7 @@ int wmain(int argc, wchar_t** argv) {
     std::wcout << L"\n============================================================\n";
     std::wcout << L"HIDs abertos e analisados: " << found << L"\n";
     if (reportLab) std::wcout << L"Laboratório em memória da coleção WCOM016C&COL04.\n";
+    else if (flagLab || col01Lab) std::wcout << L"Laboratório em memória da coleção WCOM016C&COL01.\n";
     else if (detailedPen) std::wcout << L"Consulta somente leitura às coleções WCOM016C&COL01 e COL04.\n";
     else std::wcout << L"Procure especialmente por entradas marcadas como CANDIDATO DIGITIZER.\n";
 

@@ -18,5 +18,16 @@ cmake_install.cmake
 *.sys
 
 # Runtime captures
+captures/
+*.csv
+*.log
 logs/*.txt
 !logs/.gitkeep
+
+# Personal signing material and generated driver catalogs
+*.pfx
+*.p12
+*.key
+*.pem
+*.cer
+*.cat

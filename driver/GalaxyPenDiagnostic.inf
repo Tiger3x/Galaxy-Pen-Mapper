@@ -1,0 +1,49 @@
+; Service-only primitive package. Does not bind, order or start device filters.
+; Attachment is a separately authorized, per-instance SetupAPI operation.
+[Version]
+Signature="$WINDOWS NT$"
+Class=System
+ClassGuid={4d36e97d-e325-11ce-bfc1-08002be10318}
+Provider=%Provider%
+DriverVer=09/23/2026,0.1.0.0
+CatalogFile=GalaxyPenDiagnostic.cat
+PnpLockdown=1
+
+[DefaultInstall.NTamd64]
+CopyFiles=ProbeFiles
+
+[DefaultInstall.NTamd64.Services]
+AddService=GalaxyPenDiagA,,ServiceA
+AddService=GalaxyPenDiagB,,ServiceB
+
+[ServiceA]
+DisplayName="Galaxy Pen diagnostic A (personal test)"
+ServiceType=1
+StartType=3
+ErrorControl=1
+ServiceBinary=%13%\GalaxyPenDiagA.sys
+
+[ServiceB]
+DisplayName="Galaxy Pen diagnostic B (personal test)"
+ServiceType=1
+StartType=3
+ErrorControl=1
+ServiceBinary=%13%\GalaxyPenDiagB.sys
+
+[DestinationDirs]
+ProbeFiles=13
+
+[ProbeFiles]
+GalaxyPenDiagA.sys
+GalaxyPenDiagB.sys
+
+[SourceDisksNames]
+1=%Disk%,,,
+
+[SourceDisksFiles]
+GalaxyPenDiagA.sys=1
+GalaxyPenDiagB.sys=1
+
+[Strings]
+Provider="Galaxy Pen Mapper (personal test)"
+Disk="Galaxy Pen diagnostic research package"

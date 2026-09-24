@@ -1,0 +1,57 @@
+; Observation-only research package for WCOM016C COL01.
+; It counts completed reads and never changes an input report.
+; Do not install until the old COL04 filter has been unloaded and the stack reviewed.
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=Extension
+ClassGuid={e2f84ce7-8efa-411c-aa69-97454ca4cb57}
+Provider=%ProviderName%
+ExtensionId={DB2BB5EE-22C3-43BD-9DF1-2D53082E8C41}
+DriverVer=09/23/2026,0.3.2.0
+CatalogFile=GalaxyPenCol01Probe.cat
+PnpLockdown=1
+
+[Manufacturer]
+%ProviderName%=Models,NTamd64.10.0...18362
+
+[Models.NTamd64.10.0...18362]
+%PenDescription%=Pen_Install,HID\VEN_WCOM&DEV_016C&Col01
+
+[Pen_Install.NT]
+CopyFiles=DriverCopyFiles
+
+[Pen_Install.NT.Services]
+AddService=GalaxyPenCol01Probe,,FilterService
+
+[Pen_Install.NT.Filters]
+AddFilter=GalaxyPenCol01Probe,,PenUpperFilter
+
+[PenUpperFilter]
+FilterPosition=Upper
+
+[FilterService]
+DisplayName=%ServiceDescription%
+Description=%ServiceDescription%
+ServiceType=1
+StartType=3
+ErrorControl=1
+ServiceBinary=%13%\GalaxyPenCol01Probe.sys
+
+[DriverCopyFiles]
+GalaxyPenCol01Probe.sys
+
+[DestinationDirs]
+DriverCopyFiles=13
+
+[SourceDisksNames]
+1=%DiskName%,,,
+
+[SourceDisksFiles]
+GalaxyPenCol01Probe.sys=1
+
+[Strings]
+ProviderName="Galaxy Pen Mapper (personal test)"
+PenDescription="WCOM016C COL01 Read Probe (test)"
+ServiceDescription="Galaxy Pen Mapper COL01 observation-only probe"
+DiskName="Galaxy Pen Mapper COL01 probe package"

@@ -1,33 +1,41 @@
-# P007 — Manual PW500 mode
+# P007 — Modo manual e teste da ponta (0.3.2)
 
-## User choice
+Este documento substitui o desenho anterior baseado em COL04. Em 0.3.0, interceptação e correção de ponta/borracha foram confirmadas por capturas e pelo usuário no Paint. A revisão 0.3.1 trata a pressão; veja a situação de instalação em [resultado real](P007-LIVE-RESULT.md).
 
-The user wants a notification-area icon to turn correction on and off when using a PW500 directly on the Galaxy screen. The intended user may not own an S Pen; S Pen support while correction is on is **not a product requirement**. It served as a known-good reference during diagnosis. Automatic classification is no longer required for activation. The P002.6 pen-pattern indicator remains a diagnostic observation only.
+## Campo de teste
 
-"On/off" means changing the **filter's behavior**, not repeatedly installing, disabling or unloading the Windows pen device/driver. The tray application would request a mode change and display the state confirmed by the driver. A tray icon can be implemented with Windows [`Shell_NotifyIcon`](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shell_notifyiconw); a framework driver can expose a separate [device interface](https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/using-device-interfaces) for control requests. Those APIs establish a possible control channel, **not** that a safe pen-report filter has already been proven.
+A área branca do Tray observa exclusivamente eventos de caneta entregues pelo Windows àquela área, sem injetar entrada. Funciona mesmo com driver ausente ou correção desligada.
 
-## Intended behavior
+1. Aproxime a PW500 sem encostar: veja ferramenta e ausência de contato.
+2. Faça traços leves e depois moderados; não use força excessiva.
+3. Veja contato, pressão Windows (0–1024), traço azul de caneta ou laranja de borracha/invertida.
+4. Salve CSV, de preferência na pasta de capturas existente, com nomes como `ponta-original.csv`, `ponta-corrigida.csv` e `ponta-pressao.csv`.
+5. O programa avisa antes de descartar dados não salvos. O limite é 50.000 eventos por teste; ao atingir o limite, salva-se e limpa-se para recomeçar.
 
-| State | Pen-report behavior | Tray display |
-| --- | --- | --- |
-| Off (default) | Pass every report through unchanged, regardless of which pen is used. | Clearly off. |
-| On | Apply the explicitly chosen, limited PW500 transform to original pen reports; do not create a second pen stream. Other pens are outside the intended on-mode use. | Clearly on only after driver acknowledgement. |
-| Driver absent, control link lost, or internal error | Revert to pass-through. A control-app exit/crash must not leave correction stuck on; require a bounded lease or equivalent fail-safe. | Error/off, never falsely on. |
+O CSV registra tempo relativo de recebimento, tipo de mensagem, ID, posição local, flags, contato, presença de pressão, pressão e inclinação. Não captura o desktop todo, não identifica fisicamente a caneta e não substitui o Raw HID detalhado. Eventos de mouse/toque não contam. Mensagens podem ser agrupadas pelo Windows: não é gravação de todos os pacotes do hardware.
 
-The initial filter experiment should be **pass-through only** in both switch positions. It must establish that the selected device remains functional, the original input is unchanged while off, and input is not duplicated before pressure bytes are ever modified. Only then can a pressure transform be enabled behind the same switch. The current PW500 raw pressure is mostly saturated and falls as force increases in its narrow varying region, so any remapping is degraded and cannot reconstruct real force.
+## Correção
 
-Manual activation removes the need for a one-second pen-recognition delay on the first stroke. It does **not** solve original-input isolation, pressure saturation, driver signing or installation risk. A filter on the `COL04` pen collection is a research candidate; the captured `COL01` helper reports must not be assumed to be the bytes received by that filter.
+- Desligado por padrão; relatórios encaminhados sem mudanças.
+- Ativação exige versão compatível, capacidade de correção, exatamente um dispositivo pronto e um relatório COL01 real desde a última retomada.
+- Ao ativar/mudar curva, levante a ponta: a mudança aguarda estado de levantamento conhecido.
+- `0x28 -> 0x20`: remove inversão em hover; `0x2C -> 0x21`: converte borracha/invertida em ponta.
+- Somente report ID `0x02` com 15 bytes e pressão válida (0–4095). Outros IDs/estados/tamanhos e campos não envolvidos permanecem iguais.
+- Inversão e ganho de pressão são opção independente, aplicados apenas ao contato PW500 conhecido. Na 0.3.2: ganho 100–3.200%, padrão 800%. Começar a comparação acima de 800% em 1.200%, reduzindo se o traço atingir o máximo cedo demais.
+- Pressão inicial é um mínimo artificial de 1–25%, padrão 5%. A fórmula HID é `min(4095, ceil(4095 * mínimo / 100) + floor((4095 - entrada) * ganho / 1000))`, com ganho em milésimos. Não se aplica ao hover. Com entrada 4095 e mínimo 5%, saída 205; aproximadamente 51 na escala Windows, sujeito à conversão real.
+- O painel informa mínimo/máximo bruto dos contatos e total saturado. Esses contadores reiniciam ao reconectar, mudar configuração ou transitar energia; não a cada renovação de autorização. Não são dados sincronizados com cada linha do CSV.
+- Pressão saturada não contém resolução suficiente para reconstruir força real. Os botões não são remapeados.
 
-## Offline prototype
+O painel esquerdo exibe o último instantâneo de entrada e saída do driver, na escala HID 0–4095; o campo direito mostra o resultado Windows 0–1024. Não são amostras sincronizadas nem prova automática de funcionamento no Paint.
 
-The `--wcom-pen-report-lab` scanner option now checks the `COL04` descriptor and modifies report `0x1A` **only in memory**. On this machine it confirmed that the advertised pressure field occupies bytes 6–7 in the 15-byte report and that changing it can preserve the tip-contact and X/Y fields. That is a format check, not a live interception test. See [P001](P001-HID-SCANNER.md).
+## Desligamento e manutenção
 
-`driver/PassThrough.c` is a KMDF filter **source prototype**. Debug and Release have no request queue or report transform; the opt-in Probe build forwards reads with a completion callback and logs only report metadata. All three configurations built with the Windows 10.0.26100 WDK; the produced `.sys` files are unsigned. There is no INF, device binding, tray switch, or install procedure. A successful build alone does not prove it sits at the right point in the WCOM stack or that the pen remains usable. Until a separate isolated-device pass-through test, it must not be attached to the Galaxy digitizer. See the [stack and deployment gate](P007-STACK-GATE.md).
+Fechar/liberar o identificador de controle desliga o modo no kernel. Suspensão, remoção e múltiplos dispositivos também desarmam. A autorização de operação expira em 2,5 segundos sem renovação; a expiração é conferida no processamento das leituras e consultas, não por um temporizador independente. Ao reconectar/retomar, a interface não reativa automaticamente.
 
-## Safety and validation gates
+**Liberar driver para manutenção** fecha a conexão e suspende reconexão. O campo de teste continua disponível. Para executar o atualizador, salve os dados e feche o Tray completamente; nenhum processo é encerrado à força.
 
-1. Build the source prototype (**done**), then establish a narrowly scoped filter position and test recovery in an isolated environment before binding to the live Galaxy digitizer. Never attach a broad HID-class filter by default.
-2. Off must pass input through byte-for-byte. A restart, app crash or failure to renew the on-state must return to off.
-3. On must transform the **existing** pen report rather than injecting a duplicate. If an in-place transform is not feasible, stop and redesign before any virtual device is used.
-4. The icon must show driver-confirmed state, offer a single obvious off action and avoid silently enabling at login. Switching on while a stroke is in progress should take effect only at a defined safe boundary; off must remain immediately available.
-5. Validate on real hardware only after the development package, signing, rollback and recovery plan are ready and the user explicitly approves deployment. No driver is installed or changed by writing this specification.
+O ícone da bandeja permite abrir, ativar/desativar quando disponível e sair. Alterar opções não reinstala o driver nem reinicia Windows. A sonda Probe não pode ser ativada nem pelo menu nem por outro cliente IOCTL.
+
+## Validação pendente
+
+Próximo teste dirigido: ponta e pressão ligadas, ganho 450%, mínimo 5%; levantar a ponta e fazer traços leves/moderados, sem força excessiva. Salvar CSV e observar intervalo bruto no painel. Contato positivo sem variação valida o mínimo, não pressão dinâmica. Confirmar também off/on, fechamento, suspensão/retomada e estabilidade. Não repetir capturas históricas ou os testes de ponta aprovados sem necessidade.

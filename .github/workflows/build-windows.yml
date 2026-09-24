@@ -25,6 +25,23 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
+      - name: Test applications and correction engine
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Configure diagnostic offline tests
+        run: cmake -S diagnostics -B build-diagnostic -A x64
+
+      - name: Build diagnostic tools
+        run: cmake --build build-diagnostic --config Release
+
+      - name: Test diagnostic pairing and deployment logic
+        shell: pwsh
+        run: |
+          ctest --test-dir build-diagnostic -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tests/DiagnosticDeploymentTest.ps1
+          ./tests/DiagnosticPackageLookupTest.ps1
+
       - name: Upload Windows tools
         uses: actions/upload-artifact@v4
         with:
@@ -32,4 +49,5 @@ jobs:
           path: |
             build/Release/GalaxyPenHidScanner.exe
             build/Release/GalaxyPenEventMonitor.exe
+            build/Release/GalaxyPenMapperTray.exe
           if-no-files-found: error

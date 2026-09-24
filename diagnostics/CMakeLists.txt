@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.21)
+project(GalaxyPenDiagnostic LANGUAGES CXX)
+enable_testing()
+# Explicit dependencies also cover localized MSVC /showIncludes output.
+set_source_files_properties(collector.cpp tests.cpp PROPERTIES OBJECT_DEPENDS
+  "${CMAKE_CURRENT_SOURCE_DIR}/Pairing.h;${CMAKE_CURRENT_SOURCE_DIR}/../driver/shared/GalaxyPenDiag.h;${CMAKE_CURRENT_SOURCE_DIR}/../driver/shared/GalaxyPenDiagToken.h")
+add_executable(GalaxyPenDiagnostic collector.cpp)
+target_link_libraries(GalaxyPenDiagnostic PRIVATE cfgmgr32 bcrypt)
+add_executable(DiagnosticTest tests.cpp)
+foreach(t GalaxyPenDiagnostic DiagnosticTest)
+  target_compile_features(${t} PRIVATE cxx_std_20)
+  target_compile_definitions(${t} PRIVATE UNICODE _UNICODE NOMINMAX _WIN32_WINNT=0x0A00)
+  target_compile_options(${t} PRIVATE /W4 /WX /permissive- /utf-8)
+endforeach()
+add_test(NAME DiagnosticTest COMMAND DiagnosticTest)
+set_tests_properties(DiagnosticTest PROPERTIES TIMEOUT 15)

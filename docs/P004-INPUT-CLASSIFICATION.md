@@ -8,7 +8,7 @@ As quatro sessões comparativas iniciais e 15 sessões direcionadas foram gravad
 | --- | --- | --- | --- |
 | `S_Pen` | S Pen diretamente na tela | `WCOM016C`, usage `0x0D/0x02` | `0x02` |
 | `Huion500` | PW500 diretamente na tela | `WCOM016C`, usage `0x0D/0x02` | `0x02` |
-| `HUION500_MESA SEM DRIVER` | PW500 na HS611 sem driver Huion | `VID_256C&PID_006D`, usage `0x0D/0x02` | `0x0A` |
+| `HUION500_MESA SEM DRIVER` | PW500 na HS611; rótulo histórico, ausência de driver não validada | `VID_256C&PID_006D`, usage `0x0D/0x02` | `0x0A` |
 | `HUION500_MESA COM DRIVER` | PW500 na HS611 com driver Huion | `tablethid`, usage `0x0D/0x01` | `0x05` |
 
 As sessões direcionadas cobriram hover, pressão, cada botão isolado em hover e ponta + botão. Os dois testes de ponta + botão na tela foram repetidos. A sessão rotulada `P004_HS611_NODRIVER_HOVER` foi feita com o driver instalado; o próprio arquivo confirma o caminho com driver pelo relatório `0x05`, usage `0x0D/0x01` e VID/PID `00FF:BACC`.
@@ -28,7 +28,7 @@ O teste direcionado de pressão revelou uma nuance: houve alguma variação, mas
 
 Na S Pen, os mesmos bytes variam. Um exemplo medido foi pressão bruta `0x02BB` (`699`) convertida em pressão Windows `174`. A mediana da razão Raw/Windows foi `4,005`, confirmando a escala aproximada de 12 para 10 bits.
 
-Conclusão: a PW500 é detectada por ressonância na tela, mas o digitizador/firmware não decodifica corretamente seu curso de pressão. Uma correção sobre `WM_POINTER` poderia inverter e reescalar apenas a pequena faixa que ainda varia. A região fixa em `1024` já perdeu a informação de força e não pode ser reconstruída a partir desse relatório.
+Conclusão limitada às capturas: a PW500 é detectada pela tela, mas fornece pressão invertida e frequentemente saturada. Esses dados não isolam a causa entre compatibilidade física, firmware e processamento inferior. É possível inverter e reescalar a faixa que ainda varia; a região fixa não permite reconstruir força a partir desse relatório. Posteriormente, o filtro COL01 implementou a transformação e o usuário relatou melhora em 800%; veja a [revisão 0.3.2](P007-SENSITIVITY-032.md).
 
 ## Classificação dos relatórios
 

@@ -1,0 +1,57 @@
+; Experimental WCOM016C COL01 correction; off by default.
+; Enables tool normalization and optional pressure only after live read detection.
+; Do not install until the old COL04 filter has been unloaded and the stack reviewed.
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=Extension
+ClassGuid={e2f84ce7-8efa-411c-aa69-97454ca4cb57}
+Provider=%ProviderName%
+ExtensionId={96B9F017-0177-42FD-B693-26024B3D22DC}
+DriverVer=09/23/2026,0.3.2.0
+CatalogFile=GalaxyPenCol01Corrector.cat
+PnpLockdown=1
+
+[Manufacturer]
+%ProviderName%=Models,NTamd64.10.0...18362
+
+[Models.NTamd64.10.0...18362]
+%PenDescription%=Pen_Install,HID\VEN_WCOM&DEV_016C&Col01
+
+[Pen_Install.NT]
+CopyFiles=DriverCopyFiles
+
+[Pen_Install.NT.Services]
+AddService=GalaxyPenCol01Corrector,,FilterService
+
+[Pen_Install.NT.Filters]
+AddFilter=GalaxyPenCol01Corrector,,PenUpperFilter
+
+[PenUpperFilter]
+FilterPosition=Upper
+
+[FilterService]
+DisplayName=%ServiceDescription%
+Description=%ServiceDescription%
+ServiceType=1
+StartType=3
+ErrorControl=1
+ServiceBinary=%13%\GalaxyPenCol01Corrector.sys
+
+[DriverCopyFiles]
+GalaxyPenCol01Corrector.sys
+
+[DestinationDirs]
+DriverCopyFiles=13
+
+[SourceDisksNames]
+1=%DiskName%,,,
+
+[SourceDisksFiles]
+GalaxyPenCol01Corrector.sys=1
+
+[Strings]
+ProviderName="Galaxy Pen Mapper (personal test)"
+PenDescription="WCOM016C COL01 Experimental Corrector (test)"
+ServiceDescription="Galaxy Pen Mapper COL01 experimental corrector"
+DiskName="Galaxy Pen Mapper COL01 correction package"
